@@ -33,9 +33,10 @@
               }
             )
           ];
-          # shellHook = ''
-          #   source install/local_setup.zsh
-          # '';
+          shellHook = ''
+            source <(python3 install/_local_setup_util_sh.py zsh)
+            export COLCON_CURRENT_PREFIX=$(pwd)/install
+          '';
         };
       }
     );
