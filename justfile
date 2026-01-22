@@ -8,6 +8,12 @@ oauth_client_secret := env('OAUTH_CLIENT_SECRET')
 # used in the url paths. technically can be replaced with '-', but we use it here for verbosity
 tailnet_name := env('TAILNET_NAME')
 
+# optional api key. if not specified, must be provided as arg to relevant recipes
+env_api_key := env('API_KEY')
+
+# util variables
+hostname := shell("hostname")
+date := shell("date +%s")
 
 # api key for the tailnet
 # api_key := env('API_KEY')
@@ -68,31 +74,56 @@ default:
 
 # lists all devices
 [group("api")]
-@list-devices api_key:
+@list-devices api_key=env_api_key:
     curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/devices' \
         --header "Authorization: Bearer {{api_key}}" \
             | jq
 
 # creates an auth key
 [group("api")]
-@generate-auth-key api_key:
+@generate-auth-key api_key=env_api_key:
     curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys' \
         --request POST \
         --header 'Content-Type: application/json' \
         --header "Authorization: Bearer {{api_key}}" \
-        --data "$(\cat data/create-auth-key.json)" \
-            | jq
+        --data '{ \
+            "keyType": "auth", \
+            "description": "device creation key {{hostname}}-{{date}}", \
+            "expirySeconds": 1440, \
+            "capabilities": { "devices": { "create": { \
+                "reusable": false, \
+                "ephemeral": true, \
+                "preauthorized": true, \
+                "tags": [ \
+                    "tag:test-devices" \
+                ] \
+            } } } \
+        }' | jq
 
-# lists all keys (client, auth, api)
+# lists auth keys
 [group("api")]
-@list-keys api_key:
+@list-auth-keys api_key=env_api_key:
     curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys' \
         --header "Authorization: Bearer {{api_key}}" \
-            | jq
+            | jq '.keys |= map(select(.keyType == "auth"))'
+
+# lists auth keys
+[group("api")]
+@list-api-keys api_key=env_api_key:
+    curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys' \
+        --header "Authorization: Bearer {{api_key}}" \
+            | jq '.keys |= map(select(.keyType == "api"))'
+
+# lists client keys
+[group("api")]
+@list-client-keys api_key=env_api_key:
+    curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys' \
+        --header "Authorization: Bearer {{api_key}}" \
+            | jq '.keys |= map(select(.keyType == "client"))'
 
 # deletes an key (client, auth, api)
 [group("api")]
-@delete-key api_key key_id:
+@delete-key key_id api_key=env_api_key:
     curl -s "https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys/{{key_id}}" \
         --request DELETE \
         --header "Authorization: Bearer {{api_key}}" \

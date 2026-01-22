@@ -19,8 +19,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY . .
 
-# source variables, then 
+# source variables, then generate keys and start listener
 RUN bash -lc 'set -euo pipefail; \
     source .envrc; \
     just generate-api-key; \
-    just generate-auth-key'
+    just generate-auth-key; \
+    source install/setup.bash; \
+    ros2 run py_pubsub listener &'
