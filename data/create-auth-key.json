@@ -1,0 +1,16 @@
+{
+    "keyType": "auth",
+    "description": "device creation key",
+    "capabilities": {
+        "devices": {
+            "create": {
+                "reusable": false,
+                "ephemeral": true,
+                "preauthorized": true,
+                "tags": [
+                    "tag:test-devices"
+                ]
+            }
+        }
+    }
+}
