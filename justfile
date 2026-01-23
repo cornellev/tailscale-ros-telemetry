@@ -39,7 +39,7 @@ full:
     && echo $API_KEY \
     && AUTH_KEY=$(just generate-auth-key $API_KEY | jq -r '.key') \
     && echo $AUTH_KEY \
-    && sudo tailscale up --reset --auth-key=$AUTH_KEY --hostname="$(hostname)-$(date +%s)"
+    && sudo tailscale up --reset --auth-key=$AUTH_KEY --hostname="$(hostname)"
 
 # run an ephemeral tailscale docker container, ie to create a device
 [group("docker")]
