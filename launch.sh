@@ -17,7 +17,6 @@ if ! command -v curl &> /dev/null; then
     apt-get update && apt-get install -y curl || exit 1
 fi
 
-
 if ! command -v jq &> /dev/null; then
     echo "'jq' not found. Installing..." >&2
         apt-get update && apt-get install -y jq || exit 1
@@ -27,7 +26,6 @@ if ! command -v tailscale &> /dev/null; then
     echo "'tailscale' not found. Installing..." >&2
     curl -fsSL https://tailscale.com/install.sh | sh || exit 1
 fi
-
 
 generate_api_key() {
     curl -s "https://api.tailscale.com/api/v2/oauth/token" \
@@ -77,7 +75,7 @@ start() {
         echo $api_key
     fi
 
-    name=$(hostname)-$(date +%s)
+    name=$(hostname) # -$(date +%s)
 
     # generate auth key
     auth_json=$(generate_auth_key "$name" "$api_key" 2>/dev/null) || { echo "failed to generate auth key" >&2; exit 1; }
@@ -89,10 +87,11 @@ start() {
     fi
 
     # start tailscale
-    sudo tailscale up --auth-key="$auth_key" --hostname="$name"
+    sudo tailscale up --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true 
 
     echo "tailscale started with hostname $name"
 }
+
 case "${1}" in
     start)
         # if tailscale is running, don't do anything
