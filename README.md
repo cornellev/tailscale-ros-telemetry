@@ -39,6 +39,7 @@ export RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
 
 # set this to the full path of the ./fast.xml for you
 # TODO: make it done automatically
+# TODO: is it possible for to automate populating fast.xml with values by using tailscale?
 export FASTRTPS_DEFAULT_PROFILES_FILE=/home/eric/tailscale-ros/fast.xml
 ```
 
