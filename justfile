@@ -9,7 +9,7 @@ oauth_client_secret := env('OAUTH_CLIENT_SECRET')
 tailnet_name := env('TAILNET_NAME')
 
 # optional api key. if not specified, must be provided as arg to relevant recipes
-env_api_key := env('API_KEY')
+env_api_key := env('API_KEY', '')
 
 # util variables
 hostname := shell("hostname")
@@ -76,14 +76,14 @@ full:
 # lists all devices
 [group("api")]
 @list-devices api_key=env_api_key:
-    curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/devices' \
+    curl -s 'https://api.tailscale.com/api/v2/tailnet/-/devices' \
         --header "Authorization: Bearer {{api_key}}" \
             | jq
 
 # creates an auth key
 [group("api")]
 @generate-auth-key api_key=env_api_key:
-    curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys' \
+    curl -s 'https://api.tailscale.com/api/v2/tailnet/-/keys' \
         --request POST \
         --header 'Content-Type: application/json' \
         --header "Authorization: Bearer {{api_key}}" \
@@ -104,28 +104,28 @@ full:
 # lists auth keys
 [group("api")]
 @list-auth-keys api_key=env_api_key:
-    curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys' \
+    curl -s 'https://api.tailscale.com/api/v2/tailnet/-/keys' \
         --header "Authorization: Bearer {{api_key}}" \
             | jq '.keys |= map(select(.keyType == "auth"))'
 
 # lists auth keys
 [group("api")]
 @list-api-keys api_key=env_api_key:
-    curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys' \
+    curl -s 'https://api.tailscale.com/api/v2/tailnet/-/keys' \
         --header "Authorization: Bearer {{api_key}}" \
             | jq '.keys |= map(select(.keyType == "api"))'
 
 # lists client keys
 [group("api")]
 @list-client-keys api_key=env_api_key:
-    curl -s 'https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys' \
+    curl -s 'https://api.tailscale.com/api/v2/tailnet/-/keys' \
         --header "Authorization: Bearer {{api_key}}" \
             | jq '.keys |= map(select(.keyType == "client"))'
 
 # deletes an key (client, auth, api)
 [group("api")]
 @delete-key key_id api_key=env_api_key:
-    curl -s "https://api.tailscale.com/api/v2/tailnet/{{tailnet_name}}/keys/{{key_id}}" \
+    curl -s "https://api.tailscale.com/api/v2/tailnet/-/keys/{{key_id}}" \
         --request DELETE \
         --header "Authorization: Bearer {{api_key}}" \
         | jq
