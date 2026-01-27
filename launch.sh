@@ -2,30 +2,24 @@
 
 set -euo pipefail
 
-app_name=${APP_NAME:-tailscale-ros}
-
-function ensure_command_installed() {
-    local command_name=$1
-    if ! command -v "$command_name" &> /dev/null; then
-        echo "'$command_name' not found. Install or add to PATH." >&2
-        exit 1
-    fi
-}
-
+# install necessary dependencies
 if ! command -v curl &> /dev/null; then
     echo "'curl' not found. Installing..." >&2
-    apt-get update && apt-get install -y curl || exit 1
+    sudo apt-get update && apt-get install -y curl || exit 1
 fi
 
 if ! command -v jq &> /dev/null; then
     echo "'jq' not found. Installing..." >&2
-        apt-get update && apt-get install -y jq || exit 1
+    sudo apt-get update && apt-get install -y jq || exit 1
 fi
 
 if ! command -v tailscale &> /dev/null; then
     echo "'tailscale' not found. Installing..." >&2
     curl -fsSL https://tailscale.com/install.sh | sh || exit 1
 fi
+
+# ensure that fastrtps is installed. it should already be though
+# sudo apt-get install ros-humble-rmw-fastrtps-cpp
 
 generate_api_key() {
     curl -s "https://api.tailscale.com/api/v2/oauth/token" \
