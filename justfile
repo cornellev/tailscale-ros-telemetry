@@ -33,11 +33,13 @@ default:
 
 [private]
 full:
-    API_KEY=$(just generate-api-key | jq -r '.access_token') \
+    sudo tailscale down \
+    && sudo tailscale logout \
+    && API_KEY=$(just generate-api-key | jq -r '.access_token') \
     && echo $API_KEY \
     && AUTH_KEY=$(just generate-auth-key $API_KEY | jq -r '.key') \
     && echo $AUTH_KEY \
-    && sudo tailscale up --auth-key=$AUTH_KEY --hostname="$(hostname)-$(date +%s)"
+    && sudo tailscale up --reset --auth-key=$AUTH_KEY --hostname="$(hostname)-$(date +%s)"
 
 # run an ephemeral tailscale docker container, ie to create a device
 [group("docker")]
