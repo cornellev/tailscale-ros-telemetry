@@ -28,6 +28,7 @@
               buildEnv {
                 paths = [
                   ros-core
+                  rmw-fastrtps-dynamic-cpp
                   # ... other ROS packages
                 ];
               }
