@@ -97,3 +97,10 @@ run `ros2 run py_pubsub listener` on one device
 and `ros2 run py_pubsub talker` on the other device.
 they should be communicating with each other.
 
+
+# notes
+
+references:
+- https://danaukes.com/notebook/ros2/30-configuring-ros-over-tailscale/
+- https://github.com/tailscale/tailscale/issues/11972
+- https://kamathrobotics.com/ros-2-and-vpns
