@@ -5,9 +5,6 @@
 oauth_client_id := env('OAUTH_CLIENT_ID')
 oauth_client_secret := env('OAUTH_CLIENT_SECRET')
 
-# used in the url paths. technically can be replaced with '-', but we use it here for verbosity
-tailnet_name := env('TAILNET_NAME')
-
 # optional api key. if not specified, must be provided as arg to relevant recipes
 env_api_key := env('API_KEY', '')
 

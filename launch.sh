@@ -2,27 +2,29 @@
 
 set -euo pipefail
 
-# install deps only on ubuntu
-if grep -qi ubuntu /etc/os-release; then
-    # install necessary dependencies
-    if ! command -v curl &> /dev/null; then
-        echo "'curl' not found. Installing..." >&2
-        sudo apt-get update && apt-get install -y curl || exit 1
-    fi
+check_dependencies() {
+    # install deps only on ubuntu
+    if grep -qi ubuntu /etc/os-release; then
+        # install necessary dependencies
+        if ! command -v curl &> /dev/null; then
+            echo "'curl' not found. Installing..." >&2
+            sudo apt-get update && sudo apt-get install -y curl || exit 1
+        fi
 
-    if ! command -v jq &> /dev/null; then
-        echo "'jq' not found. Installing..." >&2
-        sudo apt-get update && apt-get install -y jq || exit 1
-    fi
+        if ! command -v jq &> /dev/null; then
+            echo "'jq' not found. Installing..." >&2
+            sudo apt-get update && sudo apt-get install -y jq || exit 1
+        fi
 
-    if ! command -v tailscale &> /dev/null; then
-        echo "'tailscale' not found. Installing..." >&2
-        curl -fsSL https://tailscale.com/install.sh | sh || exit 1
-    fi
+        if ! command -v tailscale &> /dev/null; then
+            echo "'tailscale' not found. Installing..." >&2
+            curl -fsSL https://tailscale.com/install.sh | sh || exit 1
+        fi
 
-    # ensure that fastrtps is installed. it should already be though
-    sudo apt-get install ros-humble-rmw-fastrtps-dynamic-cpp
-fi
+        # rmw-fastrtps-cpp is installed by default, but we need the dynamic version
+        sudo apt-get install -y ros-humble-rmw-fastrtps-dynamic-cpp
+    fi
+}
 
 generate_api_key() {
     curl -s "https://api.tailscale.com/api/v2/oauth/token" \
@@ -52,16 +54,20 @@ generate_auth_key() {
         }'
 }
 
-# make sure the env vars are set
-if [ -z "${OAUTH_CLIENT_ID:-}" ] || [ -z "${OAUTH_CLIENT_SECRET:-}" ] ; then
-    echo "ensure OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET environment variables are set" >&2
-    exit 1
-fi
-
 start() {
+    # make sure the env vars are set
+    if [ -z "${OAUTH_CLIENT_ID:-}" ] || [ -z "${OAUTH_CLIENT_SECRET:-}" ]; then
+        echo "ensure OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET environment variables are set" >&2
+        exit 1
+    fi
+
     # generate api key
+    api_key="${API_KEY:-}"
     if [ -z "${api_key:-}" ]; then
-        api_json=$(generate_api_key 2>/dev/null) || { echo "failed to generate api key" >&2; exit 1; }
+        api_json=$(generate_api_key 2> /dev/null) || {
+            echo "failed to generate api key" >&2
+            exit 1
+        }
         api_key=$(echo "$api_json" | jq -r '.access_token')
         if [ -z "$api_key" ]; then
             echo "failed to parse api key" >&2
@@ -69,42 +75,112 @@ start() {
             exit 1
         fi
         echo "generated api key"
-        echo $api_key
+        if [ "$print_keys" = true ]; then
+            echo "API Key: $api_key"
+        fi
+    else
+        echo "using api key from environment"
     fi
 
-    name=$(hostname) # -$(date +%s)
+    name=$(hostname)
 
     # generate auth key
-    auth_json=$(generate_auth_key "$name" "$api_key" 2>/dev/null) || { echo "failed to generate auth key" >&2; exit 1; }
+    auth_json=$(generate_auth_key "$name" "$api_key" 2> /dev/null) || {
+        echo "failed to generate auth key" >&2
+        exit 1
+    }
+
     auth_key=$(echo "$auth_json" | jq -r '.key')
+
     if [ -z "$auth_key" ]; then
         echo "failed to parse auth key" >&2
         echo "$auth_json" >&2
         exit 1
     fi
+    echo "generated auth key"
+    if [ "$print_keys" = true ]; then
+        echo "Auth Key: $auth_key"
+    fi
 
     # start tailscale
-    sudo tailscale up --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true 
+    sudo tailscale up --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true
 
     echo "tailscale started with hostname $name"
 }
 
-case "${1}" in
+stop() {
+    sudo tailscale down
+    sudo tailscale logout
+    echo "tailscale stopped and logged out"
+}
+
+# initialize variables
+command=""
+install_dependencies=false
+print_keys=false
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help)
+            command=help
+            shift
+            ;;
+        --install-deps)
+            install_dependencies=true
+            shift
+            ;;
+        --print-keys)
+            print_keys=true
+            shift
+            ;;
+        start)
+            command=start
+            shift
+            ;;
+        stop)
+            command=stop
+            shift
+            ;;
+        restart)
+            command=restart
+            shift
+            ;;
+
+    esac
+done
+
+if [ "$install_dependencies" = true ]; then
+    check_dependencies
+fi
+
+case "${command}" in
     start)
-        # if tailscale is running, don't do anything
+        # if tailscale is running, error out
         if tailscale status &> /dev/null; then
-            echo "tailscale is already running" >&2
+            echo "error: tailscale is already running" >&2
             exit 1
         fi
         start
         ;;
     stop)
-        sudo tailscale down
-        sudo tailscale logout
+        stop
+        ;;
+    restart)
+        stop
+        start
         ;;
     *)
-        echo "usage: $0 {start|stop}" >&2
-        exit 1
+        echo "Usage: $0 [options] <command>"
+        echo
+        echo "Commands:"
+        echo "  start              Start tailscale with a new ephemeral device"
+        echo "  stop               Stop tailscale and logout"
+        echo "  restart            Explicitly stop and start tailscale with a new ephemeral device"
+        echo
+        echo "Options:"
+        echo "  --install-deps     Install necessary dependencies (only on Ubuntu; curl, jq, tailscale)"
+        echo "  --print-keys       Print generated API and Auth keys to stdout (for start command)"
+        echo "  --help             Show this help message"
         ;;
 esac
 

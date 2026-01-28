@@ -11,9 +11,24 @@ will install them if they are not found.
 
 # how to use
 
+## configure tailscale
+
+create a tailscale oauth app to get a client ID and secret: 
+https://tailscale.com/kb/1215/oauth-clients
+
+Then, create a tag for the devices to use. This repo uses `tag:test-devices`.
+
+TODO: when done developing, change tag to `tag:ros-devices`
+
 ## configure env vars
 set up these environment variables: (or use direnv or similar)
-for nixos use direnv. put the content below into `.envrc` and add `use flake` to the top of it and set the below env vars
+
+### nixos
+use direnv. put the content below into `.envrc` and add `use flake` to the top of the file.
+
+### other linux
+
+set the following variables:
 
 ```sh
 # tailscale oauth client id and secret
@@ -37,9 +52,10 @@ export FASTRTPS_DEFAULT_PROFILES_FILE=$(pwd)/fast.xml
 ### nixos
 
 the `flake.nix` sets everything up.
+
 build the ros2 package with `colcon build --symlink-install`
 
-run `source install/setup.zsh` or restart the shell environment, as the devshell does this too
+run `source install/setup.zsh`, run `nix develop`, or use direnv to automatically enter the shell.
 
 ### other linux
 
@@ -57,13 +73,15 @@ in `./fast.xml`, add in all the device ip/hostnames.
 this is necessary for the publisher to talk to the subscriber.
 We need to have this because tailscale doesn't support multicast,
 which ROS uses for the nodes to find each other.
+
 It may be true that the subscribers do not need to have this configured.
 
 TODO: see if subscribers can just not configure fast.xml (makes adding new subscribers much easier)
 
 ## set up tailscale
 
-run `just full`. this authenticates with tailcale to create an api key,
+run `./launch.sh start`.
+This uses the oauth client to authenticate with tailscale to create an api key,
 which then creates an auth key, and then sets up tailscale for this device,
 using a tag to ensure the device persists.
 
