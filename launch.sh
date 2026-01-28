@@ -4,7 +4,7 @@ set -euo pipefail
 
 check_dependencies() {
     # install deps only on ubuntu
-    if grep -qi ubuntu /etc/os-release; then
+    if [ -f /etc/os-release ] && grep -qi ubuntu /etc/os-release; then
         # install necessary dependencies
         if ! command -v curl &> /dev/null; then
             echo "'curl' not found. Installing..." >&2
@@ -33,15 +33,17 @@ generate_api_key() {
 }
 
 generate_auth_key() {
-    name=$1
-    api_key=$2
+    local name=$1
+    local api_key=$2
+    local description
+    description=$(printf 'device creation key %s' "$name" | jq -Rs '.')
     curl -s 'https://api.tailscale.com/api/v2/tailnet/-/keys' \
         --request POST \
         --header 'Content-Type: application/json' \
         --header "Authorization: Bearer ${api_key}" \
         --data '{
             "keyType": "auth",
-            "description": "device creation key '"${name}"'",
+            "description": '"${description}"',
             "expirySeconds": 1440,
             "capabilities": { "devices": { "create": {
                 "reusable": false,
@@ -63,13 +65,13 @@ start() {
 
     # generate api key
     api_key="${API_KEY:-}"
-    if [ -z "${api_key:-}" ]; then
-        api_json=$(generate_api_key 2> /dev/null) || {
+    if [ -z "$api_key" ]; then
+        api_json=$(generate_api_key) || {
             echo "failed to generate api key" >&2
             exit 1
         }
         api_key=$(echo "$api_json" | jq -r '.access_token')
-        if [ -z "$api_key" ]; then
+        if [ -z "$api_key" ] || [ "$api_key" = "null" ]; then
             echo "failed to parse api key" >&2
             echo "$api_json" >&2
             exit 1
@@ -85,14 +87,14 @@ start() {
     name=$(hostname)
 
     # generate auth key
-    auth_json=$(generate_auth_key "$name" "$api_key" 2> /dev/null) || {
+    auth_json=$(generate_auth_key "$name" "$api_key") || {
         echo "failed to generate auth key" >&2
         exit 1
     }
 
     auth_key=$(echo "$auth_json" | jq -r '.key')
 
-    if [ -z "$auth_key" ]; then
+    if [ -z "$auth_key" ] || [ "$auth_key" = "null" ]; then
         echo "failed to parse auth key" >&2
         echo "$auth_json" >&2
         exit 1
@@ -103,7 +105,10 @@ start() {
     fi
 
     # start tailscale
-    sudo tailscale up --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true
+    if ! sudo tailscale up --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true; then
+        echo "failed to start tailscale" >&2
+        exit 1
+    fi
 
     echo "tailscale started with hostname $name"
 }
@@ -115,14 +120,14 @@ stop() {
 }
 
 # initialize variables
-command=""
+cmd=""
 install_dependencies=false
 print_keys=false
 
 while [ $# -gt 0 ]; do
     case "$1" in
         --help)
-            command=help
+            cmd=help
             shift
             ;;
         --install-deps)
@@ -134,18 +139,21 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         start)
-            command=start
+            cmd=start
             shift
             ;;
         stop)
-            command=stop
+            cmd=stop
             shift
             ;;
         restart)
-            command=restart
+            cmd=restart
             shift
             ;;
-
+        *)
+            echo "Unknown argument: $1" >&2
+            exit 1
+            ;;
     esac
 done
 
@@ -153,7 +161,7 @@ if [ "$install_dependencies" = true ]; then
     check_dependencies
 fi
 
-case "${command}" in
+case "${cmd}" in
     start)
         # if tailscale is running, error out
         if tailscale status &> /dev/null; then
@@ -166,7 +174,7 @@ case "${command}" in
         stop
         ;;
     restart)
-        stop
+        stop || true
         start
         ;;
     *)
