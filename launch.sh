@@ -117,7 +117,7 @@ start() {
     fi
 
     # start tailscale
-    if ! $SUDO tailscale up --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true; then
+    if ! $SUDO tailscale up --ssh --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true; then
         echo "failed to start tailscale" >&2
         exit 1
     fi
