@@ -30,12 +30,12 @@ set the following variables:
 
 ```sh
 # tailscale oauth client id and secret
-export OAUTH_CLIENT_ID=
-export OAUTH_CLIENT_SECRET=
+export TAILSCALE_OAUTH_CLIENT_ID=
+export TAILSCALE_OAUTH_CLIENT_SECRET=
 
 # the name of the tailscale tag to use
 # required for starting tailscale
-export TAILSCALE_TAG_NAME="tag:ros-devices"
+export TAILSCALE_TAG_NAME="tag:ros-device"
 
 # choose a domain id. must be the same across devices
 export ROS_DOMAIN_ID=14

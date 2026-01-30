@@ -2,18 +2,25 @@
 
 set -euo pipefail
 
+# check sudo
+if [[ $EUID -ne 0 ]]; then
+    SUDO="sudo"
+else
+    SUDO=""
+fi
+
 check_dependencies() {
     # install deps only on ubuntu
     if [ -f /etc/os-release ] && grep -qi ubuntu /etc/os-release; then
         # install necessary dependencies
         if ! command -v curl &> /dev/null; then
             echo "'curl' not found. Installing..." >&2
-            sudo apt-get update && sudo apt-get install -y curl || exit 1
+            $SUDO apt-get update && $SUDO apt-get install -y curl || exit 1
         fi
 
         if ! command -v jq &> /dev/null; then
             echo "'jq' not found. Installing..." >&2
-            sudo apt-get update && sudo apt-get install -y jq || exit 1
+            $SUDO apt-get update && $SUDO apt-get install -y jq || exit 1
         fi
 
         if ! command -v tailscale &> /dev/null; then
@@ -22,14 +29,14 @@ check_dependencies() {
         fi
 
         # rmw-fastrtps-cpp is installed by default, but we need the dynamic version
-        sudo apt-get install -y ros-humble-rmw-fastrtps-dynamic-cpp
+        $SUDO apt-get install -y ros-humble-rmw-fastrtps-dynamic-cpp
     fi
 }
 
 generate_api_key() {
     curl -s "https://api.tailscale.com/api/v2/oauth/token" \
-        -d "client_id=${OAUTH_CLIENT_ID}" \
-        -d "client_secret=${OAUTH_CLIENT_SECRET}"
+        -d "client_id=${TAILSCALE_OAUTH_CLIENT_ID}" \
+        -d "client_secret=${TAILSCALE_OAUTH_CLIENT_SECRET}"
 }
 
 generate_auth_key() {
@@ -58,8 +65,8 @@ generate_auth_key() {
 
 start() {
     # make sure the env vars are set[]
-    if [ -z "${OAUTH_CLIENT_ID:-}" ] || [ -z "${OAUTH_CLIENT_SECRET:-}" ]; then
-        echo "ensure OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET environment variables are set" >&2
+    if [ -z "${TAILSCALE_OAUTH_CLIENT_ID:-}" ] || [ -z "${TAILSCALE_OAUTH_CLIENT_SECRET:-}" ]; then
+        echo "ensure TAILSCALE_OAUTH_CLIENT_ID and TAILSCALE_OAUTH_CLIENT_SECRET environment variables are set" >&2
         exit 1
     fi
 
@@ -69,7 +76,7 @@ start() {
     fi
 
     # generate api key
-    api_key="${API_KEY:-}"
+    api_key="${TAILSCALE_API_KEY:-}"
     if [ -z "$api_key" ]; then
         api_json=$(generate_api_key) || {
             echo "failed to generate api key" >&2
@@ -110,7 +117,7 @@ start() {
     fi
 
     # start tailscale
-    if ! sudo tailscale up --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true; then
+    if ! $SUDO tailscale up --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true; then
         echo "failed to start tailscale" >&2
         exit 1
     fi
@@ -119,8 +126,8 @@ start() {
 }
 
 stop() {
-    sudo tailscale down || true
-    sudo tailscale logout || true
+    $SUDO tailscale down || true
+    $SUDO tailscale logout || true
     echo "tailscale stopped and logged out"
 }
 

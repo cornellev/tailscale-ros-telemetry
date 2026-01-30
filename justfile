@@ -2,13 +2,13 @@
 
 # oauth client id and secret. make sure not to delete this with delete-key
 # possible minimum scopes required: devices, auth keys (read+write)
-oauth_client_id := env('OAUTH_CLIENT_ID')
-oauth_client_secret := env('OAUTH_CLIENT_SECRET')
+oauth_client_id := env('TAILSCALE_OAUTH_CLIENT_ID')
+oauth_client_secret := env('TAILSCALE_OAUTH_CLIENT_SECRET')
 
-tailscale_tag_name := env('TAILSCALE_TAG_NAME', 'tag:ros-devices')
+env_tag_name := env('TAILSCALE_TAG_NAME', 'tag:ros-devices')
 
 # optional api key. if not specified, must be provided as arg to relevant recipes
-env_api_key := env('API_KEY', '')
+env_api_key := env('TAILSCALE_API_KEY', '')
 
 # util variables
 hostname := shell("hostname")
@@ -31,14 +31,17 @@ default:
     @just --list --unsorted
 
 [private]
-full:
+full tag_name=env_tag_name:
     sudo tailscale down \
-    && sudo tailscale logout \
-    && API_KEY=$(just generate-api-key | jq -r '.access_token') \
-    && echo $API_KEY \
-    && AUTH_KEY=$(just generate-auth-key {{tailscale_tag_name}} $API_KEY | jq -r '.key') \
-    && echo $AUTH_KEY \
-    && sudo tailscale up --reset --auth-key=$AUTH_KEY --hostname="$(hostname)"
+    sudo tailscale logout \
+    TAILSCALE_API_KEY=$(just generate-api-key | jq -r '.access_token') \
+    && echo $TAILSCALE_API_KEY \
+    && TAILSCALE_AUTH_KEY=$(just generate-auth-key {{tag_name}} $TAILSCALE_API_KEY | jq -r '.key') \
+    && echo $TAILSCALE_AUTH_KEY \
+    && sudo tailscale up --reset --auth-key=$TAILSCALE_AUTH_KEY --hostname="$(hostname)"
+
+[group("tailscale")]
+    sudo tailscale up --authkey=
 
 # generates an api key
 [group("client")]
@@ -57,7 +60,7 @@ full:
 
 # creates an auth key
 [group("api")]
-@generate-auth-key tag_name api_key=env_api_key:
+@generate-auth-key tag_name=env_tag_name api_key=env_api_key:
     curl -s 'https://api.tailscale.com/api/v2/tailnet/-/keys' \
         --request POST \
         --header 'Content-Type: application/json' \
@@ -83,21 +86,14 @@ full:
         --header "Authorization: Bearer {{api_key}}" \
             | jq '.keys |= map(select(.keyType == "auth"))'
 
-# lists auth keys
+# lists all keys (auth, api)
 [group("api")]
-@list-api-keys api_key=env_api_key:
+@list-keys api_key=env_api_key:
     curl -s 'https://api.tailscale.com/api/v2/tailnet/-/keys' \
         --header "Authorization: Bearer {{api_key}}" \
-            | jq '.keys |= map(select(.keyType == "api"))'
+            # | jq '.keys |= map(select(.keyType == "client"))'
 
-# lists client keys
-[group("api")]
-@list-client-keys api_key=env_api_key:
-    curl -s 'https://api.tailscale.com/api/v2/tailnet/-/keys' \
-        --header "Authorization: Bearer {{api_key}}" \
-            | jq '.keys |= map(select(.keyType == "client"))'
-
-# deletes an key (client, auth, api)
+# delete a key (auth, api)
 [group("api")]
 @delete-key key_id api_key=env_api_key:
     curl -s "https://api.tailscale.com/api/v2/tailnet/-/keys/{{key_id}}" \
@@ -105,8 +101,8 @@ full:
         --header "Authorization: Bearer {{api_key}}" \
         | jq
 
-# checks an auth key
+# checks a key
 [group("api")]
-@check-key auth_key_id api_key=env_api_key :
-    curl "https://api.tailscale.com/api/v2/tailnet/-/keys/{{auth_key_id}}" \
+@check-key key_id api_key=env_api_key :
+    curl "https://api.tailscale.com/api/v2/tailnet/-/keys/{{key_id}}" \
         --header "Authorization: Bearer {{api_key}}"
