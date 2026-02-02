@@ -178,22 +178,22 @@ generate_fast_xml() {
 
     if [ -z "${TAILSCALE_TAG_NAME:-}" ]; then
         echo "no TAILSCALE_TAG_NAME env var, providing all devices" >&2
-        hostnames=$(echo "$status_json" | jq -r '([.Self.HostName] + 
-            ((.Peer // {})|to_entries|map(.value.HostName)))
-            | map(ascii_downcase)
+        hostnames=$(echo "$status_json" | jq -r '([.Self.DNSName] + 
+            ((.Peer // {})|to_entries|map(.value.DNSName)))
+            | map(ascii_downcase | split(".")[0])
             | unique
             | sort
             | .[]')
     else
         echo "filtering devices by tag: ${TAILSCALE_TAG_NAME}" >&2
         hostnames=$(echo "$status_json" | jq -r --arg tag "$TAILSCALE_TAG_NAME" '
-            ([.Self.HostName] +
+            ([.Self.DNSName] +
             ((.Peer // {})
                 | to_entries
                 | map(.value
                     | select((.Tags // []) | index($tag))
-                    | .HostName)))
-            | map(ascii_downcase)
+                    | .DNSName)))
+            | map(ascii_downcase | split(".")[0])
             | unique
             | sort
             | .[]
