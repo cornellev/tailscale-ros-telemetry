@@ -15,6 +15,9 @@ services:
       - TAILSCALE_OAUTH_CLIENT_ID
       - TAILSCALE_OAUTH_CLIENT_SECRET
       - TAILSCALE_TAG_NAME
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
+      - ROS_LOCALHOST_ONLY=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
     volumes:
       - .:/workspace
     working_dir: /workspace
