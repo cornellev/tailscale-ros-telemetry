@@ -5,12 +5,6 @@ RUN apt-get update && apt-get install -y \
     ca-certificates gnupg git build-essential unzip wget ros-humble-rmw-fastrtps-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-# packages for pi gpio
-# RUN apt-get update && apt-get install -y \
-#     python3-pip python3-lgpio python3-pigpio  \
-#     && rm -rf /var/lib/apt/lists/*
-# RUN pip3 install gpiozero
-
 # install pigpio from source
 RUN git clone https://github.com/joan2937/pigpio /pigpio
 WORKDIR /pigpio
@@ -32,6 +26,7 @@ COPY src/ /ros-telemetry/src/
 WORKDIR /ros-telemetry
 RUN . /opt/ros/humble/setup.sh && colcon build --symlink-install
 
+COPY fast.xml /fast.xml
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
