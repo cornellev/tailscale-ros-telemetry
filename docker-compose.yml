@@ -3,21 +3,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        INSTALL_TAILSCALE: ${INSTALL_TAILSCALE:-true}
     privileged: true
     devices:
       - ${GPIO_DEVICE:-/dev/gpiomem}:${GPIO_DEVICE:-/dev/gpiomem}
     restart: unless-stopped
     network_mode: host
     environment:
-      - ENABLE_TAILSCALE=${ENABLE_TAILSCALE:-true}
-      - TAILSCALE_OAUTH_CLIENT_ID
-      - TAILSCALE_OAUTH_CLIENT_SECRET
-      - TAILSCALE_TAG_NAME
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_LOCALHOST_ONLY=0
       - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
     volumes:
       - .:/workspace
+      - /dev/shm:/dev/shm # bind host POSIX shm into the container
     working_dir: /workspace
