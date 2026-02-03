@@ -2,7 +2,7 @@ FROM ros:humble-ros-base-jammy
 
 # install packages
 RUN apt-get update && apt-get install -y \
-    ca-certificates gnupg git build-essential unzip wget ros-humble-rmw-fastrtps-cpp \
+    ca-certificates gnupg git build-essential unzip wget ros-humble-rmw-fastrtps-dynamic-cpp \
     && rm -rf /var/lib/apt/lists/*
 
 # install pigpio from source
