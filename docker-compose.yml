@@ -6,6 +6,7 @@ services:
     privileged: true
     devices:
       - ${GPIO_DEVICE:-/dev/gpiomem}:${GPIO_DEVICE:-/dev/gpiomem}
+      - /dev/net/tun:/dev/net/tun
     restart: unless-stopped
     network_mode: host
     environment:
