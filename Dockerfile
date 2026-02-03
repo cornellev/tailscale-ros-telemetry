@@ -10,10 +10,6 @@ RUN git clone https://github.com/joan2937/pigpio /pigpio
 WORKDIR /pigpio
 RUN make && make install
 
-RUN apt-get update && apt-get install -y \
-    cmake libpthread-stubs0-dev  \
-    && rm -rf /var/lib/apt/lists/*
-
 # install spi sensor reader
 RUN git clone --depth=1 https://github.com/cornellev/spi_sensor_reader /spi_sensor_reader
 WORKDIR /spi_sensor_reader
