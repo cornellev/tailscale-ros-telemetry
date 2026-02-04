@@ -2,7 +2,6 @@
 *
 
 # only include what's needed for the build
-!entrypoint.sh
-!launch.sh
-!supervisord.conf
 !src/
+!entrypoint.sh
+!fast.xml
