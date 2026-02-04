@@ -71,13 +71,32 @@ generate_auth_key() {
             "expirySeconds": 1440,
             "capabilities": { "devices": { "create": {
                 "reusable": false,
-                "ephemeral": true,
                 "preauthorized": true,
                 "tags": [
                     "'"${TAILSCALE_TAG_NAME}"'"
                 ]
             } } }
         }'
+}
+
+up() {
+    local auth_key="${1:-}"
+    local hostname="${2:-}"
+    local args=(--ssh --accept-dns=true --accept-routes=true)
+
+    if [ -n "$auth_key" ]; then
+        args+=(--auth-key="$auth_key")
+    fi
+    if [ -n "$hostname" ]; then
+        args+=(--hostname="$hostname")
+    fi
+
+    if ! $SUDO tailscale up "${args[@]}"; then
+        echo "failed to start tailscale" >&2
+        exit 1
+    fi
+
+    echo "tailscale is up"
 }
 
 start() {
@@ -133,19 +152,18 @@ start() {
         echo "Auth Key: $auth_key"
     fi
 
-    # start tailscale
-    if ! $SUDO tailscale up --ssh --auth-key="$auth_key" --hostname="$name" --accept-dns=true --accept-routes=true; then
-        echo "failed to start tailscale" >&2
-        exit 1
-    fi
-
-    echo "tailscale started with hostname $name"
+    up "$auth_key" "$name"
 }
 
-stop() {
+down() {
+    $SUDO tailscale down || true
+    echo "tailscale disconnected"
+}
+
+logout() {
     $SUDO tailscale down || true
     $SUDO tailscale logout || true
-    echo "tailscale stopped and logged out"
+    echo "tailscale logged out"
 }
 
 generate_fast_xml() {
@@ -160,22 +178,22 @@ generate_fast_xml() {
 
     if [ -z "${TAILSCALE_TAG_NAME:-}" ]; then
         echo "no TAILSCALE_TAG_NAME env var, providing all devices" >&2
-        hostnames=$(echo "$status_json" | jq -r '([.Self.HostName] + 
-            ((.Peer // {})|to_entries|map(.value.HostName)))
-            | map(ascii_downcase)
+        hostnames=$(echo "$status_json" | jq -r '([.Self.DNSName] + 
+            ((.Peer // {})|to_entries|map(.value.DNSName)))
+            | map(ascii_downcase | split(".")[0])
             | unique
             | sort
             | .[]')
     else
         echo "filtering devices by tag: ${TAILSCALE_TAG_NAME}" >&2
         hostnames=$(echo "$status_json" | jq -r --arg tag "$TAILSCALE_TAG_NAME" '
-            ([.Self.HostName] +
+            ([.Self.DNSName] +
             ((.Peer // {})
                 | to_entries
                 | map(.value
                     | select((.Tags // []) | index($tag))
-                    | .HostName)))
-            | map(ascii_downcase)
+                    | .DNSName)))
+            | map(ascii_downcase | split(".")[0])
             | unique
             | sort
             | .[]
@@ -262,12 +280,16 @@ while [ $# -gt 0 ]; do
             cmd=start
             shift
             ;;
-        stop)
-            cmd=stop
+        up)
+            cmd=up
             shift
             ;;
-        restart)
-            cmd=restart
+        down)
+            cmd=down
+            shift
+            ;;
+        logout)
+            cmd=logout
             shift
             ;;
         generate-fast-xml)
@@ -299,12 +321,19 @@ case "${cmd}" in
         fi
         start
         ;;
-    stop)
-        stop
+    up)
+        # check if tailscaled daemon is running
+        if ! pgrep -x tailscaled &> /dev/null; then
+            echo "error: tailscaled daemon is not running" >&2
+            exit 1
+        fi
+        up
         ;;
-    restart)
-        stop || true
-        start
+    down)
+        down
+        ;;
+    logout)
+        logout
         ;;
     generate-fast-xml)
         generate_fast_xml "$output_file"
@@ -313,13 +342,14 @@ case "${cmd}" in
         echo "Usage: $0 [options] <command>"
         echo
         echo "Commands:"
-        echo "    start                  Start tailscale with a new ephemeral device"
+        echo "    start                  Start tailscale with a new device"
         echo "        --print-keys       Print generated API and Auth keys to stdout"
         echo
-        echo "    stop                   Stop tailscale and logout"
+        echo "    up                     Reconnect to tailscale (device must already be authenticated)"
         echo
-        echo "    restart                Explicitly stop and start tailscale with a new ephemeral device"
-        echo "        --print-keys       Print generated API and Auth keys to stdout"
+        echo "    down                   Disconnect from tailscale (keeps credentials)"
+        echo
+        echo "    logout                 Disconnect and logout from tailscale (removes credentials)"
         echo
         echo "    generate-fast-xml      Generate fast.xml from tailscale peers (outputs to stdout by default)"
         echo "        --write <file>     Write to <file> instead of stdout"

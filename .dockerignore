@@ -1,10 +1,8 @@
-install/
-log/
-build/
+# ignore everything
+*
 
-# direnv
-.direnv
-.envrc
-.env
-
-fast.xml
+# only include what's needed for the build
+!entrypoint.sh
+!launch.sh
+!supervisord.conf
+!src/

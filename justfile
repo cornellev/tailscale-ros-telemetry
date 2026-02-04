@@ -68,7 +68,6 @@ full tag_name=env_tag_name:
             "expirySeconds": 1440, \
             "capabilities": { "devices": { "create": { \
                 "reusable": false, \
-                "ephemeral": true, \
                 "preauthorized": true, \
                 "tags": [ \
                     "{{tag_name}}" \
