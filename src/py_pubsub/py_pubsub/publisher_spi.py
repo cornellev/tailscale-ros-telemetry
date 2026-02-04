@@ -10,15 +10,16 @@ class SpiPublisher(Node):
     def __init__(self):
         super().__init__('spi_publisher')
         self.publisher_ = self.create_publisher(String, 'spi_data', 10)
+        #create shared memory buffer
         self.reader = SensorShmReader()
         self.timer = self.create_timer(0.005, self.timer_callback)  # ~200 Hz
 
     def timer_callback(self):
-        #snap = self.reader.read_snapshot()
-        snap = {
-            'sensor1': random.randint(0,123),
-            'sensor2' : random.randint(0,123),
-            'sensor3': random.randint(0,123),
+        snap = self.reader.read_snapshot()
+        #snap = {
+           # 'sensor1': random.randint(0,123),
+           # 'sensor2' : random.randint(0,123),
+           # 'sensor3': random.randint(0,123),
 
 
         }
