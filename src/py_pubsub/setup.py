@@ -28,7 +28,7 @@ setup(
             'listener = py_pubsub.subscriber_spi:main',
             'talkerdemo = py_pubsub.publisher_member_function:main',
             'listenerdemo = py_pubsub.subscriber_member_function:main',
-            'publisher_test = py_pubsub.test_spi_publisher: main',
+            'publisher_test = py_pubsub.test_spi_publisher:main',
         ],
     },
 )

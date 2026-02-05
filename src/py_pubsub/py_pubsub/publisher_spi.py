@@ -16,17 +16,14 @@ class SpiPublisher(Node):
 
     def timer_callback(self):
         snap = self.reader.read_snapshot_dict()
-        #snap = {
-           # 'sensor1': random.randint(0,123),
-           # 'sensor2' : random.randint(0,123),
-           # 'sensor3': random.randint(0,123),
 
         if snap:
-           
             msg = String()
             msg.data = json.dumps(snap)
             self.publisher_.publish(msg)
-            self.get_logger().debug(f"Published: {msg.data}")
+            self.get_logger().info(f"Published: {msg.data}")
+        else:
+            self.get_logger().warning("No data read from shared memory")
 
     def destroy_node(self):
         self.reader.close()
