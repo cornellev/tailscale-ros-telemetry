@@ -1,12 +1,9 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
 
-# start tailscale if enabled (default: true)
-if [ "${ENABLE_TAILSCALE:-true}" = "true" ]; then
-    echo "Starting tailscale..."
-    /launch.sh generate-fast-xml --write fast.xml
-    /launch.sh start --print-keys
-fi
-
-# run supervisord to manage spi_writer and talker
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+source /opt/ros/humble/setup.bash \
+    && source /ros-telemetry/install/setup.bash \
+    && export FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/fast.xml \
+	&& echo "RMW_IMPLEMENTATION is set to: $RMW_IMPLEMENTATION" \
+	&& echo "ROS_DOMAIN_ID is set to : $ROS_DOMAIN_ID" \
+    && ros2 run py_pubsub talker 2>&1 \
+    | sed -u 's/^/[talker] /'

@@ -21,8 +21,6 @@ class SpiPublisher(Node):
            # 'sensor2' : random.randint(0,123),
            # 'sensor3': random.randint(0,123),
 
-
-        }
         if snap:
            
             msg = String()

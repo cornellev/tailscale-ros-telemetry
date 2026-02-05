@@ -1,44 +1,29 @@
-# final image
-FROM ros:humble-ros-core-jammy
+FROM ros:humble-ros-base-jammy
 
-# build args
-ARG INSTALL_TAILSCALE=true
-
-# install misc packages
+# install packages
 RUN apt-get update && apt-get install -y \
-    jq ca-certificates curl gnupg git build-essential supervisor \
+    ca-certificates gnupg git build-essential unzip wget ros-humble-rmw-fastrtps-dynamic-cpp \
     && rm -rf /var/lib/apt/lists/*
 
-# install tailscale (optional)
-RUN if [ "$INSTALL_TAILSCALE" = "true" ]; then \
-    curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null \
-    && curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends tailscale \
-    && rm -rf /var/lib/apt/lists/*; \
-    fi
-
-# packages for pi gpio
-RUN apt-get update && apt-get install -y \
-    python3-pip python3-lgpio python3-pigpio python3-rpi.gpio \
-    && rm -rf /var/lib/apt/lists/*
-RUN pip3 install gpiozero --break-system-packages
+# install pigpio from source
+RUN git clone https://github.com/joan2937/pigpio /pigpio
+WORKDIR /pigpio
+RUN make && make install
 
 # install spi sensor reader
-RUN git clone https://github.com/cornellev/spi_sensor_reader /spi_sensor_reader
+RUN git clone --depth=1 https://github.com/cornellev/spi_sensor_reader /spi_sensor_reader
 WORKDIR /spi_sensor_reader
 RUN g++ -O2 -std=c++17 spi_shm.cpp \
     -lpigpiod_if2 -lrt -pthread \
     -o spi_writer
 
-# copy and build tailscale-ros-telemetry (this repo)
-COPY src/ /tailscale-ros-telemetry/src/
-WORKDIR /tailscale-ros-telemetry
-RUN source /opt/ros/humble/setup.sh && colcon build --symlink-install
+# copy and build ros-telemetry (this repo)
+COPY src/ /ros-telemetry/src/
+WORKDIR /ros-telemetry
+RUN . /opt/ros/humble/setup.sh && colcon build --symlink-install
 
+COPY fast.xml /workspace/fast.xml
 COPY entrypoint.sh /entrypoint.sh
-COPY launch.sh /launch.sh
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-RUN chmod +x /entrypoint.sh /launch.sh
+RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

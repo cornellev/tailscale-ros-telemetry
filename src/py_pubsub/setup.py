@@ -26,7 +26,9 @@ setup(
         'console_scripts': [
             'talker = py_pubsub.publisher_spi:main',
             'listener = py_pubsub.subscriber_spi:main',
-	    'publisher_test = py_pubsub.test_spi_publisher: main',
+            'talkerdemo = py_pubsub.publisher_member_function:main',
+            'listenerdemo = py_pubsub.subscriber_member_function:main',
+            'publisher_test = py_pubsub.test_spi_publisher: main',
         ],
     },
 )
