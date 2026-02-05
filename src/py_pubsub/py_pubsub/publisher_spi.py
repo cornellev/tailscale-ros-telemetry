@@ -15,7 +15,7 @@ class SpiPublisher(Node):
         self.timer = self.create_timer(0.005, self.timer_callback)  # ~200 Hz
 
     def timer_callback(self):
-        snap = self.reader.read_snapshot()
+        snap = self.reader.read_snapshot_dict()
         #snap = {
            # 'sensor1': random.randint(0,123),
            # 'sensor2' : random.randint(0,123),
