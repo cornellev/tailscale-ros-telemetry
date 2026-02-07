@@ -1,10 +1,10 @@
 services:
-  tailscale-authkey1:
+  tailscale:
     build:
       context: .
       dockerfile: Dockerfile.tailscale
-    container_name: ts-authkey-test
-    hostname: banana
+    container_name: ts-authkey-container
+    hostname: ros-tailscale-service
     environment:
       - TS_CLIENT_ID=${TS_CLIENT_ID:-}
       - TS_CLIENT_SECRET=${TS_CLIENT_SECRET:-}
@@ -14,7 +14,7 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:ros-device --ssh=true
       - TAILSCALE_TAG_NAME=tag:ros-device
     volumes:
-      - ts-authkey-test:/var/lib/tailscale
+      - ts-authkey-container:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
       - .:/workspace
     cap_add:
@@ -29,13 +29,13 @@ services:
   ros:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.ros
     devices:
       - ${GPIO_DEVICE:-/dev/gpiomem}:${GPIO_DEVICE:-/dev/gpiomem}
     restart: unless-stopped
-    network_mode: service:tailscale-authkey1
+    network_mode: service:tailscale
     depends_on:
-      tailscale-authkey1:
+      tailscale:
         condition: service_healthy
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
@@ -47,5 +47,5 @@ services:
     working_dir: /workspace
 
 volumes:
-  ts-authkey-test:
+  ts-authkey-container:
     driver: local

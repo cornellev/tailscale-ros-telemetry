@@ -4,7 +4,7 @@ FROM tailscale/tailscale:latest
 RUN apk add --no-cache jq bash
 
 # Copy custom entrypoint
-COPY tailscale-entrypoint.sh /tailscale-entrypoint.sh
-RUN chmod +x /tailscale-entrypoint.sh
+COPY entrypoint-tailscale.sh /entrypoint-tailscale.sh
+RUN chmod +x /entrypoint-tailscale.sh
 
-ENTRYPOINT ["/tailscale-entrypoint.sh"]
+ENTRYPOINT ["/entrypoint-tailscale.sh"]
