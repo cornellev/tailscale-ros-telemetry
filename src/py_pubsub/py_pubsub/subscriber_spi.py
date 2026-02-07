@@ -16,6 +16,7 @@ class SpiSubscriber(Node):
         self.subscription  # prevent unused variable warning
 
     def listener_callback(self, msg):
+        self.get_logger().info('I heard: "%s"' % msg.data)
         try:
             data = json.loads(msg.data)  # convert JSON string back to dict
             self.get_logger().info(f"Received SPI data: {data}")
