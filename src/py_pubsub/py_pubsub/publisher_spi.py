@@ -32,6 +32,7 @@ class SpiPublisher(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = SpiPublisher()
+    print("started publisher")
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
