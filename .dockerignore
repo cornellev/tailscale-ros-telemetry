@@ -4,4 +4,4 @@
 # only include what's needed for the build
 !src/
 !entrypoint.sh
-!fast.xml
+!tailscale-entrypoint.sh
