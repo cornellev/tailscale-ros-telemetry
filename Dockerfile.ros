@@ -23,7 +23,7 @@ WORKDIR /ros-telemetry
 RUN . /opt/ros/humble/setup.sh && colcon build --symlink-install
 
 COPY fast.xml /workspace/fast.xml
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY entrypoint-ros.sh /entrypoint-ros.sh
+RUN chmod +x /entrypoint-ros.sh
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/entrypoint-ros.sh"]
