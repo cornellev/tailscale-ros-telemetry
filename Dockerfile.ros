@@ -22,7 +22,7 @@ COPY src/ /ros-telemetry/src/
 WORKDIR /ros-telemetry
 RUN . /opt/ros/humble/setup.sh && colcon build --symlink-install
 
-COPY fast.xml /workspace/fast.xml
+# fast.xml is generated at runtime by the Tailscale container and provided via the .:/workspace volume
 COPY entrypoint-ros.sh /entrypoint-ros.sh
 RUN chmod +x /entrypoint-ros.sh
 
