@@ -18,6 +18,8 @@ class SpiPublisher(Node):
         snap = self.reader.read_snapshot_dict()
 
         if snap:
+            # add ros timestamp so subscribers can compute delay
+            snap["_t_publish_ns"] = self.get_clock().now().nanoseconds
             msg = String()
             msg.data = json.dumps(snap)
             self.publisher_.publish(msg)

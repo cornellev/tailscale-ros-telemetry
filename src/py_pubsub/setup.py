@@ -29,6 +29,7 @@ setup(
             'talkerdemo = py_pubsub.publisher_member_function:main',
             'listenerdemo = py_pubsub.subscriber_member_function:main',
             'publisher_test = py_pubsub.test_spi_publisher:main',
+            'latency_reporter = py_pubsub.latency_reporter:main',
         ],
     },
 )
