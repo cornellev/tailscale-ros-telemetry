@@ -20,6 +20,12 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/fast.xml"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
   rosbag:
     build:
       context: .
@@ -30,12 +36,6 @@ services:
     command: sh /workspace/rosbagpub.sh
     volumes:
       - .:/workspace
-    healthcheck:
-      test: ["CMD", "test", "-f", "/workspace/fast.xml"]
-      interval: 2s
-      timeout: 5s
-      retries: 30
-      start_period: 10s
   ros:
     build:
       context: .
