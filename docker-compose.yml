@@ -45,7 +45,6 @@ services:
       - .:/workspace
       - /dev/shm:/dev/shm # bind host POSIX shm into the container
     working_dir: /workspace
-    command: sh /workspace/rosbagpub.sh
 
 volumes:
   ts-authkey-container:
