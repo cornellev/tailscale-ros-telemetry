@@ -20,6 +20,16 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
+    rosbag:
+    build:
+      context: .
+      dockerfile: Dockerfile.ros
+    depends_on:
+      ros:
+        condition: service_started
+    command: sh /workspace/rosbagpub.sh
+    volumes:
+      - .:/workspace
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/fast.xml"]
       interval: 2s
@@ -45,6 +55,7 @@ services:
       - .:/workspace
       - /dev/shm:/dev/shm # bind host POSIX shm into the container
     working_dir: /workspace
+    command: sh /workspace/rosbagpub.sh
 
 volumes:
   ts-authkey-container:
