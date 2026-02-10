@@ -20,7 +20,7 @@ services:
     cap_add:
       - NET_ADMIN
       - NET_RAW
-    rosbag:
+  rosbag:
     build:
       context: .
       dockerfile: Dockerfile.ros
