@@ -17,6 +17,7 @@ services:
       - ts-authkey-container:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
       - .:/workspace
+
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -36,6 +37,7 @@ services:
     command: sh /workspace/rosbagpub.sh
     volumes:
       - .:/workspace
+      - rosbag_data:/workspace/bags
   ros:
     build:
       context: .
@@ -54,9 +56,12 @@ services:
     volumes:
       - .:/workspace
       - /dev/shm:/dev/shm # bind host POSIX shm into the container
+      - rosbag_data:/workspace/bags
     working_dir: /workspace
     command: sh /workspace/rosbagpub.sh
 
 volumes:
   ts-authkey-container:
+    driver: local
+  rosbag_data:
     driver: local
