@@ -10,13 +10,6 @@ RUN git clone https://github.com/joan2937/pigpio /pigpio
 WORKDIR /pigpio
 RUN make && make install
 
-# install spi sensor reader
-RUN git clone --depth=1 https://github.com/cornellev/spi_sensor_reader /spi_sensor_reader
-WORKDIR /spi_sensor_reader
-RUN g++ -O2 -std=c++17 spi_shm.cpp \
-    -lpigpiod_if2 -lrt -pthread \
-    -o spi_writer
-
 # copy and build ros-telemetry (this repo)
 COPY src/ /ros-telemetry/src/
 WORKDIR /ros-telemetry
