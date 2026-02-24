@@ -34,10 +34,14 @@ services:
     depends_on:
       ros:
         condition: service_started
-    command: sh /workspace/rosbagpub.sh
+    command: ros2 bag record /spi_data -o /workspace/bags
     volumes:
       - .:/workspace
       - rosbag_data:/workspace/bags
+    network_mode: service:tailscale
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
+      
   ros:
     build:
       context: .
