@@ -58,7 +58,7 @@ services:
       - /dev/shm:/dev/shm # bind host POSIX shm into the container
       - rosbag_data:/workspace/bags
     working_dir: /workspace
-    command: sh /workspace/rosbagpub.sh
+    command: sh ros2 run py_pubsub spi_publisher
 
 volumes:
   ts-authkey-container:

@@ -3,7 +3,7 @@
 set -e
 
 TOPIC_NAME="spi_data"
-BAG_NAME="/worksapce/bags/publisher_data_bag"
+BAG_NAME="/workspace/bags/publisher_data_bag"
 #PUBLISHER_CMD="ros2 run talker"
 
 sleep 2
