@@ -33,4 +33,9 @@ AMENT_IGNORE
 .envrc
 .env
 
+# auto-generated fast.xml
+# used in the tailscale container, but also mounted to host for easy inspection/editing
 fast.xml
+
+# ros bagging
+bags/
