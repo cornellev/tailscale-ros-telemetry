@@ -17,6 +17,7 @@ RUN . /opt/ros/humble/setup.sh && colcon build --symlink-install
 
 # fast.xml is generated at runtime by the Tailscale container and provided via the .:/workspace volume
 COPY entrypoint-ros.sh /entrypoint-ros.sh
-RUN chmod +x /entrypoint-ros.sh
+COPY entrypoint-rosbag.sh /entrypoint-rosbag.sh
+RUN chmod +x /entrypoint-ros.sh /entrypoint-rosbag.sh
 
 ENTRYPOINT ["/entrypoint-ros.sh"]

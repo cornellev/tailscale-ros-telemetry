@@ -31,16 +31,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.ros
+    entrypoint: ["/entrypoint-rosbag.sh"]
     depends_on:
       ros:
         condition: service_started
-    command: ros2 bag record /spi_data -o /workspace/bags
     volumes:
       - .:/workspace
-      - rosbag_data:/workspace/bags
+      - ./bags:/workspace/bags
     network_mode: service:tailscale
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
+      - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
       
   ros:
     build:
@@ -60,12 +61,8 @@ services:
     volumes:
       - .:/workspace
       - /dev/shm:/dev/shm # bind host POSIX shm into the container
-      - rosbag_data:/workspace/bags
     working_dir: /workspace
-    command: sh ros2 run py_pubsub spi_publisher
 
 volumes:
   ts-authkey-container:
-    driver: local
-  rosbag_data:
     driver: local
