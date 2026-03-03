@@ -14,7 +14,7 @@ services:
       - TS_EXTRA_ARGS=--advertise-tags=tag:ros-device --ssh=true
       - TAILSCALE_TAG_NAME=tag:ros-device
       - TS_ENABLE_HEALTH_CHECK=true
-      - TS_LOCAL_ADDR_PORT=localhost:9002
+      - TS_LOCAL_ADDR_PORT=127.0.0.1:9002
     volumes:
       - ts-authkey-container:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
