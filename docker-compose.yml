@@ -27,6 +27,18 @@ services:
       timeout: 5s
       retries: 30
       start_period: 10s
+  discovery-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.ros
+    entrypoint: ["/entrypoint-discovery.sh"]
+    container_name: ros-discovery-server
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    restart: unless-stopped
+
   rosbag:
     build:
       context: .
@@ -42,7 +54,8 @@ services:
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
-      
+      - ROS_DISCOVERY_SERVER=127.0.0.1:11811
+
   ros:
     build:
       context: .
@@ -58,6 +71,7 @@ services:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_LOCALHOST_ONLY=0
       - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
+      - ROS_DISCOVERY_SERVER=127.0.0.1:11811
     volumes:
       - .:/workspace
       - /dev/shm:/dev/shm # bind host POSIX shm into the container
