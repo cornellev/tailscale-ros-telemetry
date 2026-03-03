@@ -10,7 +10,7 @@ reading shm telemetry data and publishing as ROS2 topics
 
 ## docker compose services
 
-there are three services defined in [docker-compose.yml](docker-compose.yml):
+there are four services defined in [docker-compose.yml](docker-compose.yml):
 
 ### `tailscale`
 
@@ -19,6 +19,14 @@ Connects the device to your Tailscale network and gates startup for the other se
 - authenticates using OAuth credentials (`TS_CLIENT_ID` / `TS_CLIENT_SECRET`) and advertises the tag set in `TAILSCALE_TAG_NAME` (default: `tag:ros-device`)
 - after connecting to the tailnet, runs [entrypoint-tailscale.sh](entrypoint-tailscale.sh) which generates `fast.xml` — a FastRTPS profile that configures ROS2 DDS discovery to use the device's Tailscale IP, enabling cross-network ROS2 communication
 - exposes a healthcheck that blocks the other services from starting until `fast.xml` has been written
+
+### `discovery-server`
+
+Runs a [Fast DDS Discovery Server](https://docs.ros.org/en/humble/Tutorials/Advanced/Discovery-Server/Discovery-Server.html), which centralizes DDS peer discovery instead of using multicast/unicast to all known peers.
+
+- runs [entrypoint-discovery.sh](entrypoint-discovery.sh): sources the ROS2 environment and starts `fastdds discovery --server-id 0` on port 11811 (UDP)
+- shares the `tailscale` network namespace, so it is reachable on the Tailscale IP of this device at port 11811
+- the `ros` and `rosbag` services connect to it via `ROS_DISCOVERY_SERVER=127.0.0.1:11811`
 
 ### `ros`
 
@@ -39,13 +47,14 @@ Records the `/spi_data` topic to timestamped bag files.
 ### startup order
 
 1. `tailscale`: connects and generates fast.xml
-2. `ros`: starts publishing
-3. `rosbag`: starts recording
+2. `discovery-server`: starts the Fast DDS discovery server
+3. `ros`: starts publishing
+4. `rosbag`: starts recording
 
 ## How to add a subscriber
 
-The publisher discovers subscribers (not the other way around). When the publisher starts, `generate_fast_xml` queries the Tailscale API for all peers with a matching tag and includes them as initial DDS peers in `fast.xml`. So a subscriber just needs to join the tailnet with that tag **before the publisher starts** (or the publisher needs to be restarted to pick it up).
-c
+Subscribers connect to the discovery server running on this device. Set `ROS_DISCOVERY_SERVER` to the Tailscale IP of this device on port 11811, and the subscriber will automatically discover all ROS2 topics without needing to be listed in `fast.xml`.
+
 The tag is configured via `TAILSCALE_TAG_NAME` on the publisher's `tailscale` service (default: `tag:ros-device`). Subscribers must advertise the same tag.
 
 Add a Tailscale service to your subscriber's docker-compose using the `tailscale/tailscale:latest` image:
@@ -82,8 +91,11 @@ volumes:
     driver: local
 ```
 
-For each service that needs to be on the Tailscale network, use the `tailscale` network namespace:
+For each service that needs to be on the Tailscale network, use the `tailscale` network namespace, and point it at the discovery server:
 ```yaml
   your_subscriber_service:
     network_mode: service:tailscale
+    environment:
+      - ROS_DISCOVERY_SERVER=<tailscale-ip-of-publisher>:11811
+      - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
 ```
