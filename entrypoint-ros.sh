@@ -3,7 +3,6 @@ set -e
 
 source /opt/ros/humble/setup.bash
 source /ros-telemetry/install/setup.bash
-export FASTRTPS_DEFAULT_PROFILES_FILE=/workspace/fast.xml
 
 echo "RMW_IMPLEMENTATION is set to: ${RMW_IMPLEMENTATION:-<unset>}"
 echo "ROS_DOMAIN_ID is set to: ${ROS_DOMAIN_ID:-<unset>}"
