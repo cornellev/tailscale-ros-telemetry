@@ -2,7 +2,7 @@ FROM ros:humble-ros-base-jammy
 
 # install packages
 RUN apt-get update && apt-get install -y \
-    ca-certificates gnupg git build-essential unzip wget ros-humble-rmw-fastrtps-dynamic-cpp \
+    ca-certificates gnupg git build-essential unzip wget \
     && rm -rf /var/lib/apt/lists/*
 
 # install pigpio from source
@@ -15,7 +15,6 @@ COPY src/ /ros-telemetry/src/
 WORKDIR /ros-telemetry
 RUN . /opt/ros/humble/setup.sh && colcon build --symlink-install
 
-# fast.xml is generated at runtime by the Tailscale container and provided via the .:/workspace volume
 COPY entrypoint-ros.sh /entrypoint-ros.sh
 COPY entrypoint-rosbag.sh /entrypoint-rosbag.sh
 COPY entrypoint-discovery.sh /entrypoint-discovery.sh

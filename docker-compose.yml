@@ -13,6 +13,8 @@ services:
       - TS_AUTH_ONCE=true
       - TS_EXTRA_ARGS=--advertise-tags=tag:ros-device --ssh=true
       - TAILSCALE_TAG_NAME=tag:ros-device
+      - TS_ENABLE_HEALTH_CHECK=true
+      - TS_LOCAL_ADDR_PORT=localhost:9002
     volumes:
       - ts-authkey-container:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
@@ -22,7 +24,7 @@ services:
       - NET_ADMIN
       - NET_RAW
     healthcheck:
-      test: ["CMD", "test", "-f", "/workspace/fast.xml"]
+      test: ["CMD", "curl", "-f", "http://localhost:9002/healthz"]
       interval: 2s
       timeout: 5s
       retries: 30
@@ -53,7 +55,6 @@ services:
     network_mode: service:tailscale
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
-      - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
       - ROS_DISCOVERY_SERVER=127.0.0.1:11811
 
   ros:
@@ -70,7 +71,6 @@ services:
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_LOCALHOST_ONLY=0
-      - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
       - ROS_DISCOVERY_SERVER=127.0.0.1:11811
     volumes:
       - .:/workspace

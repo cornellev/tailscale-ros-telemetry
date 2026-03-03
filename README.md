@@ -17,8 +17,7 @@ there are four services defined in [docker-compose.yml](docker-compose.yml):
 Connects the device to your Tailscale network and gates startup for the other services
 
 - authenticates using OAuth credentials (`TS_CLIENT_ID` / `TS_CLIENT_SECRET`) and advertises the tag set in `TAILSCALE_TAG_NAME` (default: `tag:ros-device`)
-- after connecting to the tailnet, runs [entrypoint-tailscale.sh](entrypoint-tailscale.sh) which generates `fast.xml` — a FastRTPS profile that configures ROS2 DDS discovery to use the device's Tailscale IP, enabling cross-network ROS2 communication
-- exposes a healthcheck that blocks the other services from starting until `fast.xml` has been written
+- runs [entrypoint-tailscale.sh](entrypoint-tailscale.sh), which waits for the Tailscale connection to be established before exiting the startup loop
 
 ### `discovery-server`
 
@@ -32,7 +31,7 @@ Runs a [Fast DDS Discovery Server](https://docs.ros.org/en/humble/Tutorials/Adva
 
 The main ROS2 publisher. Reads telemetry from host shared memory and publishes to the `/spi_data` topic.
 
-- runs [entrypoint-ros.sh](entrypoint-ros.sh): configures the ROS2 environment, uses the fast.xml file, and then launches the `py_pubsub talker` node
+- runs [entrypoint-ros.sh](entrypoint-ros.sh): sources the ROS2 environment and launches the `py_pubsub talker` node
 - mounts `/dev/shm` from the host to read shared memory
 - accesses GPIO via the configured `GPIO_DEVICE` (default `/dev/gpiomem`)
 
@@ -40,20 +39,20 @@ The main ROS2 publisher. Reads telemetry from host shared memory and publishes t
 
 Records the `/spi_data` topic to timestamped bag files.
 
-- Runs [entrypoint-rosbag.sh](entrypoint-rosbag.sh): uses the same dockerfile as `ros`, uses fast.xml, but instead, runs `ros2 bag record /spi_data`
+- Runs [entrypoint-rosbag.sh](entrypoint-rosbag.sh): sources the ROS2 environment and runs `ros2 bag record /spi_data`
 - saves bags to `./bags/bag_YYYYMMDD-HHMMSS/`
 - starts after the `ros` service has started
 
 ### startup order
 
-1. `tailscale`: connects and generates fast.xml
+1. `tailscale`: connects to the tailnet
 2. `discovery-server`: starts the Fast DDS discovery server
 3. `ros`: starts publishing
 4. `rosbag`: starts recording
 
 ## How to add a subscriber
 
-Subscribers connect to the discovery server running on this device. Set `ROS_DISCOVERY_SERVER` to the Tailscale IP of this device on port 11811, and the subscriber will automatically discover all ROS2 topics without needing to be listed in `fast.xml`.
+Subscribers connect to the discovery server running on this device. Set `ROS_DISCOVERY_SERVER` to the Tailscale IP of this device on port 11811, and the subscriber will automatically discover all ROS2 topics.
 
 The tag is configured via `TAILSCALE_TAG_NAME` on the publisher's `tailscale` service (default: `tag:ros-device`). Subscribers must advertise the same tag.
 
@@ -97,5 +96,4 @@ For each service that needs to be on the Tailscale network, use the `tailscale` 
     network_mode: service:tailscale
     environment:
       - ROS_DISCOVERY_SERVER=<tailscale-ip-of-publisher>:11811
-      - RMW_IMPLEMENTATION=rmw_fastrtps_dynamic_cpp
 ```
