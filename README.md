@@ -52,9 +52,42 @@ Records the `/spi_data` topic to timestamped bag files.
 
 ## How to add a subscriber
 
-Subscribers connect to the discovery server running on this device. Set `ROS_DISCOVERY_SERVER` to the Tailscale IP of this device on port 11811, and the subscriber will automatically discover all ROS2 topics.
+Subscribers connect to the discovery server running on this device over the Tailscale network.
 
 The tag is configured via `TAILSCALE_TAG_NAME` on the publisher's `tailscale` service (default: `tag:ros-device`). Subscribers must advertise the same tag.
+
+### CLIENT vs SUPER_CLIENT
+
+FastDDS discovery server supports two client modes:
+
+- **CLIENT** (plain) — set `ROS_DISCOVERY_SERVER=<ip>:11811`. This is sufficient for subscribing to topics you already know the name of (e.g. `ros2 topic echo /spi_data`).
+- **SUPER_CLIENT** — required for introspection tools like `ros2 topic list`, `ros2 node list`, etc. Requires an XML profile file pointing at the discovery server.
+
+A `super_client.xml` template is included in this repo. Replace the placeholder IP before use:
+
+```bash
+sed 's/DISCOVERY_SERVER_IP/<tailscale-ip-of-publisher>/' super_client.xml > /tmp/super_client.xml
+export FASTRTPS_DEFAULT_PROFILES_FILE=/tmp/super_client.xml
+```
+
+### Native (non-Docker) subscriber
+
+If you have ROS2 Humble installed natively and your machine is on the same Tailscale network:
+
+```bash
+# Set the discovery server (CLIENT mode — enough for topic echo)
+export ROS_DISCOVERY_SERVER=<tailscale-ip-of-publisher>:11811
+
+# Subscribe to a known topic
+ros2 topic echo /spi_data std_msgs/msg/String
+
+# For introspection tools (ros2 topic list, etc.), use SUPER_CLIENT mode instead:
+sed 's/DISCOVERY_SERVER_IP/<tailscale-ip-of-publisher>/' super_client.xml > /tmp/super_client.xml
+export FASTRTPS_DEFAULT_PROFILES_FILE=/tmp/super_client.xml
+ros2 topic list
+```
+
+### Docker subscriber
 
 Add a Tailscale service to your subscriber's docker-compose using the `tailscale/tailscale:latest` image:
 
@@ -90,10 +123,23 @@ volumes:
     driver: local
 ```
 
-For each service that needs to be on the Tailscale network, use the `tailscale` network namespace, and point it at the discovery server:
+For a subscriber that only needs to echo known topics (CLIENT mode):
 ```yaml
   your_subscriber_service:
     network_mode: service:tailscale
     environment:
       - ROS_DISCOVERY_SERVER=<tailscale-ip-of-publisher>:11811
+```
+
+For a subscriber that needs introspection tools (SUPER_CLIENT mode), generate the XML and mount it:
+```bash
+sed 's/DISCOVERY_SERVER_IP/<tailscale-ip-of-publisher>/' super_client.xml > /tmp/super_client.xml
+```
+```yaml
+  your_subscriber_service:
+    network_mode: service:tailscale
+    environment:
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/etc/fastdds/super_client.xml
+    volumes:
+      - /tmp/super_client.xml:/etc/fastdds/super_client.xml:ro
 ```
