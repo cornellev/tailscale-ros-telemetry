@@ -52,6 +52,7 @@ services:
     volumes:
       - .:/workspace
       - ./bags:/workspace/bags
+      - /dev/shm:/dev/shm # share host shm so FastDDS shared memory transport works with ros
     network_mode: service:tailscale
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
