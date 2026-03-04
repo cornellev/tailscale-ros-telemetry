@@ -29,6 +29,8 @@
                 paths = [
                   ros-core
                   rmw-fastrtps-dynamic-cpp
+                  ros2bag
+                  rosbag2-storage-default-plugins
                   # ... other ROS packages
                 ];
               }
