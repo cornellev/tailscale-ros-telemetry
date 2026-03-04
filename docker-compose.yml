@@ -54,7 +54,6 @@ services:
       - ./bags:/workspace/bags
     network_mode: service:tailscale
     environment:
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_DISCOVERY_SERVER=127.0.0.1:11811
 
@@ -72,7 +71,6 @@ services:
       discovery-server:
         condition: service_started
     environment:
-      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_LOCALHOST_ONLY=0
       - ROS_DISCOVERY_SERVER=127.0.0.1:11811
