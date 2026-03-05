@@ -105,7 +105,7 @@ The tag is configured via `TAILSCALE_TAG_NAME` on the publisher's `tailscale` se
 
 FastDDS discovery server supports two client modes:
 
-- **CLIENT** (plain) — set `ROS_DISCOVERY_SERVER=<ip>:11811`. This is sufficient for subscribing to topics you already know the name of (e.g. `ros2 topic echo /spi_data`).
+- **CLIENT** (plain) — set `ROS_DISCOVERY_SERVER=<ip>:11811`. This is sufficient for subscribing to topics you already know the name and type of (e.g. `ros2 topic echo /spi_data std_msgs/msg/String`).
 - **SUPER_CLIENT** — required for introspection tools like `ros2 topic list`, `ros2 node list`, etc. Requires an XML profile file pointing at the discovery server.
 
 A `super_client.xml` template is included in this repo. Replace the placeholder IP before use:
