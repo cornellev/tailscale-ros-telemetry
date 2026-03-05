@@ -2,7 +2,7 @@ services:
   tailscale:
     build:
       context: .
-      dockerfile: Dockerfile.tailscale
+      dockerfile: docker/Dockerfile.tailscale
     container_name: ts-authkey-container
     hostname: ros-tailscale-service
     environment:
@@ -30,7 +30,7 @@ services:
   discovery-server:
     build:
       context: .
-      dockerfile: Dockerfile.ros
+      dockerfile: docker/Dockerfile.ros
     entrypoint: ["/entrypoint-discovery.sh"]
     container_name: ros-discovery-server
     network_mode: service:tailscale
@@ -42,7 +42,7 @@ services:
   rosbag:
     build:
       context: .
-      dockerfile: Dockerfile.ros
+      dockerfile: docker/Dockerfile.ros
     entrypoint: ["/entrypoint-rosbag.sh"]
     depends_on:
       ros:
@@ -58,7 +58,7 @@ services:
   ros:
     build:
       context: .
-      dockerfile: Dockerfile.ros
+      dockerfile: docker/Dockerfile.ros
     devices:
       - ${GPIO_DEVICE:-/dev/gpiomem}:${GPIO_DEVICE:-/dev/gpiomem}
     restart: unless-stopped
