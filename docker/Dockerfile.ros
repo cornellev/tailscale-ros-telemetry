@@ -15,9 +15,9 @@ COPY src/ /ros-telemetry/src/
 WORKDIR /ros-telemetry
 RUN . /opt/ros/humble/setup.sh && colcon build --symlink-install
 
-COPY entrypoint-ros.sh /entrypoint-ros.sh
-COPY entrypoint-rosbag.sh /entrypoint-rosbag.sh
-COPY entrypoint-discovery.sh /entrypoint-discovery.sh
+COPY docker/entrypoint-ros.sh /entrypoint-ros.sh
+COPY docker/entrypoint-rosbag.sh /entrypoint-rosbag.sh
+COPY docker/entrypoint-discovery.sh /entrypoint-discovery.sh
 RUN chmod +x /entrypoint-ros.sh /entrypoint-rosbag.sh /entrypoint-discovery.sh
 
 ENTRYPOINT ["/entrypoint-ros.sh"]

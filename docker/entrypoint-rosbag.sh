@@ -13,7 +13,7 @@ export PYTHONUNBUFFERED=1
 
 # Generate SUPER_CLIENT profile from template
 # SUPER_CLIENT is required for ros2 bag record to discover topic types
-TEMPLATE="/workspace/super_client.example.xml"
+TEMPLATE="/workspace/config/super_client.example.xml"
 PROFILE="/tmp/super_client.xml"
 sed 's/DISCOVERY_SERVER_IP/127.0.0.1/' "$TEMPLATE" > "$PROFILE"
 export FASTRTPS_DEFAULT_PROFILES_FILE="$PROFILE"
