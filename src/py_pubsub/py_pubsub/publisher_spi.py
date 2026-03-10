@@ -24,6 +24,8 @@ class SpiPublisher(Node):
             msg.data = json.dumps(snap)
             self.publisher_.publish(msg)
             self.get_logger().info(f"Published: {msg.data}")
+            with open("output_file.txt", 'a') as file:
+                file.write(msg)
         else:
             self.get_logger().warning("No data read from shared memory")
 
