@@ -76,6 +76,11 @@ services:
       - .:/workspace
       - /dev/shm:/dev/shm # bind host POSIX shm into the container
     working_dir: /workspace
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "20"
 
 volumes:
   ts-authkey-container:
