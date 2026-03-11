@@ -17,7 +17,6 @@ services:
     volumes:
       - ts-authkey-container:/var/lib/tailscale
       - /dev/net/tun:/dev/net/tun
-
     cap_add:
       - NET_ADMIN
       - NET_RAW
@@ -27,6 +26,7 @@ services:
       timeout: 5s
       retries: 30
       start_period: 10s
+
   discovery-server:
     build:
       context: .
@@ -55,13 +55,14 @@ services:
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_DISCOVERY_SERVER=127.0.0.1:11811
+    restart: unless-stopped
 
   ros:
     build:
       context: .
       dockerfile: docker/Dockerfile.ros
-    devices:
-      - ${GPIO_DEVICE:-/dev/gpiomem}:${GPIO_DEVICE:-/dev/gpiomem}
+    # devices:
+    #   - ${GPIO_DEVICE:-/dev/gpiomem}:${GPIO_DEVICE:-/dev/gpiomem}
     restart: unless-stopped
     network_mode: service:tailscale
     depends_on:
@@ -81,6 +82,23 @@ services:
       options:
         max-size: "100m"
         max-file: "20"
+
+  subscriber:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ros
+    entrypoint: ["/entrypoint-subscriber.sh"]
+    depends_on:
+      discovery-server:
+        condition: service_started
+    volumes:
+      - .:/workspace
+      - /dev/shm:/dev/shm
+    network_mode: service:tailscale
+    environment:
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
+      - ROS_DISCOVERY_SERVER=127.0.0.1:11811
+    working_dir: /workspace
 
 volumes:
   ts-authkey-container:

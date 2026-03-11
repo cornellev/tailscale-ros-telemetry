@@ -18,6 +18,7 @@ RUN . /opt/ros/humble/setup.sh && colcon build --symlink-install
 COPY docker/entrypoint-ros.sh /entrypoint-ros.sh
 COPY docker/entrypoint-rosbag.sh /entrypoint-rosbag.sh
 COPY docker/entrypoint-discovery.sh /entrypoint-discovery.sh
-RUN chmod +x /entrypoint-ros.sh /entrypoint-rosbag.sh /entrypoint-discovery.sh
+COPY docker/entrypoint-subscriber.sh /entrypoint-subscriber.sh
+RUN chmod +x /entrypoint-ros.sh /entrypoint-rosbag.sh /entrypoint-discovery.sh /entrypoint-subscriber.sh
 
 ENTRYPOINT ["/entrypoint-ros.sh"]
