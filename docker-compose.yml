@@ -89,15 +89,15 @@ services:
       dockerfile: docker/Dockerfile.ros
     entrypoint: ["/entrypoint-subscriber.sh"]
     depends_on:
-      discovery-server:
-        condition: service_started
+      tailscale:
+        condition: service_healthy
     volumes:
       - .:/workspace
       - /dev/shm:/dev/shm
     network_mode: service:tailscale
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
-      - ROS_DISCOVERY_SERVER=127.0.0.1:11811
+      - ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-127.0.0.1:11811}
     working_dir: /workspace
 
 volumes:
