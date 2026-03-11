@@ -38,7 +38,7 @@ ROS_DOMAIN_ID=<ros-domain-id>
 
 ## docker compose services
 
-there are four services defined in [docker-compose.yml](docker-compose.yml):
+there are five services defined in [docker-compose.yml](docker-compose.yml):
 
 ### `tailscale`
 
@@ -77,6 +77,16 @@ Records the `/spi_data` topic to timestamped bag files.
 - saves bags to `./bags/bag_YYYYMMDD-HHMMSS/`
 - starts after the `ros` service has started
 
+### `subscriber`
+
+
+A verification listener that subscribes to `/spi_data` and logs received messages. Hidden behind the `verify` profile so it doesn't start by default.
+
+- runs [entrypoint-subscriber.sh](docker/entrypoint-subscriber.sh): sources the ROS2 environment and launches the `py_pubsub listener` node
+- runs as a plain DDS CLIENT via `ROS_DISCOVERY_SERVER` (defaults to `127.0.0.1:11811`, overridable via env var)
+- start locally: `docker compose --profile verify up -d`
+- can also run on a remote machine (see [running a subscriber on a remote machine](#running-a-subscriber-on-a-remote-machine))
+
 ## shared memory and discovery
 
 `rosbag` service needs two special things:
@@ -97,52 +107,30 @@ the services are started sequentially, one after the other
 
 ## How to add a subscriber
 
-Subscribers connect to the discovery server running on this device over the Tailscale network.
-
-The tag is configured via `TAILSCALE_TAG_NAME` on the publisher's `tailscale` service (default: `tag:ros-device`). Subscribers must advertise the same tag.
-
-### CLIENT vs SUPER_CLIENT
-
-FastDDS discovery server supports two client modes:
-
-- **CLIENT** (plain) — set `ROS_DISCOVERY_SERVER=<ip>:11811`. This is sufficient for subscribing to topics you already know the name and type of (e.g. `ros2 topic echo /spi_data std_msgs/msg/String`).
-- **SUPER_CLIENT** — required for introspection tools like `ros2 topic list`, `ros2 node list`, etc. Requires an XML profile file pointing at the discovery server.
-
-A `super_client.xml` template is included in this repo. Replace the placeholder IP before use:
+Subscribers connect to the discovery server over the Tailscale network. Find the publisher's Tailscale IP:
 
 ```bash
-sed 's/DISCOVERY_SERVER_IP/<tailscale-ip-of-publisher>/' super_client.xml > /tmp/super_client.xml
-export FASTRTPS_DEFAULT_PROFILES_FILE=/tmp/super_client.xml
+docker exec ts-authkey-container tailscale ip -4
 ```
 
-### Native (non-Docker) subscriber
+### Using this repo on a remote machine
 
-If you have ROS2 Humble installed natively and your machine is on the same Tailscale network:
+If this repo is cloned on the remote machine:
 
 ```bash
-# Set the discovery server (CLIENT mode — enough for topic echo)
-export ROS_DISCOVERY_SERVER=<tailscale-ip-of-publisher>:11811
-
-# Subscribe to a known topic
-ros2 topic echo /spi_data std_msgs/msg/String
-
-# For introspection tools (ros2 topic list, etc.), use SUPER_CLIENT mode instead:
-sed 's/DISCOVERY_SERVER_IP/<tailscale-ip-of-publisher>/' config/super_client.example.xml > /tmp/super_client.xml
-export FASTRTPS_DEFAULT_PROFILES_FILE=/tmp/super_client.xml
-ros2 topic list
+cd tailscale-ros-telemetry
+ROS_DISCOVERY_SERVER=<publisher-tailscale-ip>:11811 docker compose --profile verify up -d tailscale subscriber
+docker compose --profile verify logs -f subscriber
 ```
 
-### Docker subscriber
-
-Add a Tailscale service to your subscriber's docker-compose using the `tailscale/tailscale:latest` image:
+### Adding a docker subscriber
 
 ```yaml
+services:
   tailscale:
     image: tailscale/tailscale:latest
-    # set your container name
-    container_name: ts-your-service-authkey-container
-    # set your hostname for tailscale
-    hostname: your-service-tailscale-service
+    container_name: ts-subscriber
+    hostname: my-subscriber
     environment:
       - TS_CLIENT_ID=${TS_CLIENT_ID:-}
       - TS_CLIENT_SECRET=${TS_CLIENT_SECRET:-}
@@ -151,39 +139,37 @@ Add a Tailscale service to your subscriber's docker-compose using the `tailscale
       - TS_AUTH_ONCE=true
       - TS_EXTRA_ARGS=--advertise-tags=tag:ros-device --ssh=true
     volumes:
-      # ts-authkey-container is used to persist the auth key state across container restarts
       - ts-authkey-container:/var/lib/tailscale
-      # required for tailscale networking to work
       - /dev/net/tun:/dev/net/tun
     cap_add:
       - NET_ADMIN
       - NET_RAW
-```
 
-You also need to create the volume for the auth key state:
-```yaml
+  subscriber:
+    image: ros:humble-ros-base-jammy
+    network_mode: service:tailscale
+    environment:
+      - ROS_DISCOVERY_SERVER=<publisher-tailscale-ip>:11811
+    command: bash -c "source /opt/ros/humble/setup.bash && ros2 topic echo /spi_data std_msgs/msg/String"
+
 volumes:
   ts-authkey-container:
     driver: local
 ```
 
-For a subscriber that only needs to echo known topics (CLIENT mode):
-```yaml
-  your_subscriber_service:
-    network_mode: service:tailscale
-    environment:
-      - ROS_DISCOVERY_SERVER=<tailscale-ip-of-publisher>:11811
+### SUPER_CLIENT mode
+
+Required for introspection tools (`ros2 topic list`, `ros2 node list`, `ros2 bag record`). Generate the XML profile and mount it:
+
+```bash
+sed 's/DISCOVERY_SERVER_IP/<publisher-tailscale-ip>/' config/super_client.example.xml > /tmp/super_client.xml
 ```
 
-For a subscriber that needs introspection tools (SUPER_CLIENT mode), generate the XML and mount it:
-```bash
-sed 's/DISCOVERY_SERVER_IP/<tailscale-ip-of-publisher>/' super_client.xml > /tmp/super_client.xml
-```
 ```yaml
-  your_subscriber_service:
+  your_service:
     network_mode: service:tailscale
     environment:
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/etc/fastdds/super_client.xml
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/config/super_client.xml
     volumes:
-      - /tmp/super_client.xml:/etc/fastdds/super_client.xml:ro
+      - /tmp/super_client.xml:/config/super_client.xml:ro
 ```
