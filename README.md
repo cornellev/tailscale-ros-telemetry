@@ -85,7 +85,7 @@ A verification listener that subscribes to `/spi_data` and logs received message
 - runs [entrypoint-subscriber.sh](docker/entrypoint-subscriber.sh): sources the ROS2 environment and launches the `py_pubsub listener` node
 - runs as a plain DDS CLIENT via `ROS_DISCOVERY_SERVER` (defaults to `127.0.0.1:11811`, overridable via env var)
 - start locally: `docker compose --profile verify up -d`
-- can also run on a remote machine (see [running a subscriber on a remote machine](#running-a-subscriber-on-a-remote-machine))
+- can also run on a remote machine (see [using this repo on a remote machine](#using-this-repo-on-a-remote-machine))
 
 ## shared memory and discovery
 
