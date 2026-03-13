@@ -92,6 +92,9 @@ services:
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_DISCOVERY_SERVER=127.0.0.1:11811
+      - TAILSCALE_CONTAINER_NAME=${TAILSCALE_CONTAINER_NAME:-ts-authkey-container}
+      - ROSBAG_IMAGE=${ROSBAG_IMAGE:-tailscale-ros-telemetry-rosbag}
+      - ROSBAG_WORKSPACE=${ROSBAG_WORKSPACE:-/home/cev/tailscale-ros-telemetry}
     volumes:
       - .:/workspace
       - /dev/shm:/dev/shm # bind host POSIX shm into the container

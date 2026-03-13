@@ -19,22 +19,24 @@ src/                    # ROS2 package source
 
 ## setup
 
-create a `.env` file in the project root with your Tailscale OAuth credentials:
+copy `.env.example` to `.env` and fill in your values:
 
-```sh
-# required variables:
-TS_CLIENT_ID=<your-client-id>
-TS_CLIENT_SECRET=<your-client-secret>
-
-# optional variables:
-
-# default = /dev/gpiomem
-# for raspberry pi 5, use: /dev/gpiomem4
-GPIO_DEVICE=<path-to-gpio-device>
-
-# default = 14
-ROS_DOMAIN_ID=<ros-domain-id>
+```bash
+cp .env.example .env
 ```
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `TS_CLIENT_ID` | yes | — | Tailscale OAuth client ID |
+| `TS_CLIENT_SECRET` | yes | — | Tailscale OAuth client secret |
+| `ROS_DOMAIN_ID` | no | `14` | ROS2 domain ID |
+| `ROS_DISCOVERY_SERVER` | no | `127.0.0.1:11811` | Fast DDS discovery server address |
+| `ROSBAG_API_PORT` | no | `8080` | Port the rosbag HTTP API listens on |
+| `ROSBAG_CONTAINER_NAME` | no | `rosbag` | Name of the rosbag Docker container |
+| `ROSBAG_IMAGE` | no | `tailscale-ros-telemetry-rosbag` | Docker image used when creating the rosbag container |
+| `ROSBAG_WORKSPACE` | no | `/home/cev/tailscale-ros-telemetry` | Host path mounted as `/workspace` in the rosbag container |
+| `TAILSCALE_CONTAINER_NAME` | no | `ts-authkey-container` | Name of the Tailscale container (used for network sharing) |
+| `GPIO_DEVICE` | no | `/dev/gpiomem` | GPIO device path (Raspberry Pi 5: `/dev/gpiomem4`) |
 
 ## docker compose services
 
@@ -106,10 +108,13 @@ Endpoints:
 - `GET /bag/status`: Returns whether the `rosbag` container is running or not
 - `GET /healthz`: Healthcheck endpoint
 
-Optional environment variables:
+Optional environment variables (all configurable via `.env`):
 
-- `ROSBAG_API_PORT` (default `8080`)
-- `ROSBAG_CONTAINER_NAME` (override container name; default `rosbag`)
+- `ROSBAG_API_PORT` (default `8080`) — port the API listens on
+- `ROSBAG_CONTAINER_NAME` (default `rosbag`) — container to start/stop
+- `ROSBAG_IMAGE` (default `tailscale-ros-telemetry-rosbag`) — image used to create the container if it doesn't exist
+- `ROSBAG_WORKSPACE` (default `/home/cev/tailscale-ros-telemetry`) — host path mounted into the container
+- `TAILSCALE_CONTAINER_NAME` (default `ts-authkey-container`) — container whose network namespace is shared
 
 Example:
 
