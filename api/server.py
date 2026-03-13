@@ -78,6 +78,44 @@ def _container_status(container: Container) -> ContainerStatus:
     )
 
 
+def _create_rosbag_container(client: docker.DockerClient) -> Container:
+    name = os.environ.get("ROSBAG_CONTAINER_NAME", "rosbag")
+    ts_container_name = os.environ.get(
+        "TAILSCALE_CONTAINER_NAME", "ts-authkey-container"
+    )
+    workspace = os.environ.get("ROSBAG_WORKSPACE", "/home/cev/tailscale-ros-telemetry")
+    image = os.environ.get("ROSBAG_IMAGE", "tailscale-ros-telemetry-rosbag")
+
+    try:
+        ts_container = client.containers.get(ts_container_name)
+    except NotFound as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"tailscale container not found: {ts_container_name}",
+        ) from exc
+
+    return cast(
+        Container,
+        client.containers.create(
+            image=image,
+            name=name,
+            entrypoint=["/entrypoint-rosbag.sh"],
+            working_dir="/ros-telemetry",
+            environment={
+                "ROS_DISCOVERY_SERVER": "127.0.0.1:11811",
+                "ROS_DOMAIN_ID": os.environ.get("ROS_DOMAIN_ID", "14"),
+            },
+            volumes={
+                "/dev/shm": {"bind": "/dev/shm", "mode": "rw"},
+                workspace: {"bind": "/workspace", "mode": "rw"},
+                f"{workspace}/bags": {"bind": "/workspace/bags", "mode": "rw"},
+            },
+            network_mode=f"container:{ts_container.id}",
+            restart_policy={"Name": "unless-stopped"},
+        ),
+    )
+
+
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
     return HealthResponse()
@@ -95,9 +133,13 @@ def bag_status() -> ContainerStatus:
 @app.post("/bag/start", response_model=BagActionResponse)
 def bag_start() -> BagActionResponse:
     def _handler(client: docker.DockerClient) -> BagActionResponse:
-        container = _find_rosbag_container(client)
+        name = os.environ.get("ROSBAG_CONTAINER_NAME", "rosbag")
+        try:
+            container = cast(Container, client.containers.get(name))
+        except NotFound:
+            container = _create_rosbag_container(client)
+
         container.reload()
-        # already was running, no need to do anything
         if container.status == "running":
             status = _container_status(container)
             return BagActionResponse(**status.model_dump(), action="noop")
