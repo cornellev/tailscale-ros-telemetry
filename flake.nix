@@ -22,6 +22,10 @@
           name = "ros2_ws";
           packages = [
             pkgs.colcon
+            pkgs.python3
+            pkgs.python3Packages.fastapi
+            pkgs.python3Packages.uvicorn
+            pkgs.python3Packages.docker
             # ... other non-ROS packages
             (
               with pkgs.rosPackages.humble;
@@ -34,6 +38,7 @@
                 ];
               }
             )
+            
           ];
           shellHook = ''
             source <(python3 install/_local_setup_util_sh.py zsh)

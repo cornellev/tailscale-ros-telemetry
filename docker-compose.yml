@@ -39,10 +39,29 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  rosbag-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: rosbag-api
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    environment:
+      - API_PORT=${ROSBAG_API_PORT:-8080}
+      - ROSBAG_CONTAINER_NAME=${ROSBAG_CONTAINER_NAME:-rosbag}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
   rosbag:
     build:
       context: .
       dockerfile: docker/Dockerfile.ros
+    container_name: rosbag
+    profiles:
+      - bag
     entrypoint: ["/entrypoint-rosbag.sh"]
     depends_on:
       ros:

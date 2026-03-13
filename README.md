@@ -38,7 +38,7 @@ ROS_DOMAIN_ID=<ros-domain-id>
 
 ## docker compose services
 
-there are five services defined in [docker-compose.yml](docker-compose.yml):
+there are six services defined in [docker-compose.yml](docker-compose.yml):
 
 ### `tailscale`
 
@@ -69,13 +69,55 @@ The main ROS2 publisher. Reads telemetry from host shared memory and publishes t
 
 ### `rosbag`
 
-Records the `/spi_data` topic to timestamped bag files.
+Records the `/spi_data` topic to timestamped bag files. This service does not
+start immediately with the others (profile `bag`), but is controlled via the
+`rosbag-api` service.
 
 - runs [entrypoint-rosbag.sh](docker/entrypoint-rosbag.sh): sources the ROS2 environment and runs `ros2 bag record /spi_data`
 - runs as a SUPER_CLIENT — required for `ros2 bag record` to discover topic types
 - binds and mounts `/dev/shm` from the host for FastDDS shared memory transport with `ros`
 - saves bags to `./bags/bag_YYYYMMDD-HHMMSS/`
 - starts after the `ros` service has started
+
+To create the container without starting it (so the API can start/stop it):
+
+```bash
+docker compose --profile bag up -d --no-start rosbag
+```
+
+To start it immediately without the API:
+
+```bash
+docker compose --profile bag up -d rosbag
+```
+
+### `rosbag-api`
+
+Super simple HTTP API that starts/stops the rosbag container. It is intended for
+a frontend to control recording without needing direct access to Docker or the command line.
+
+- talks to Docker via `/var/run/docker.sock`
+- exposed on port `8080` on the device's Tailscale IP (configurable via `ROSBAG_API_PORT`)
+
+Endpoints:
+
+- `POST /bag/start`: Starts the `rosbag` container
+- `POST /bag/stop`: Stops the `rosbag` container
+- `GET /bag/status`: Returns whether the `rosbag` container is running or not
+- `GET /healthz`: Healthcheck endpoint
+
+Optional environment variables:
+
+- `ROSBAG_API_PORT` (default `8080`)
+- `ROSBAG_CONTAINER_NAME` (override container name; default `rosbag`)
+
+Example:
+
+```bash
+curl -X POST http://<tailscale-ip>:8080/bag/start
+curl http://<tailscale-ip>:8080/bag/status
+curl -X POST http://<tailscale-ip>:8080/bag/stop
+```
 
 ### `subscriber`
 
