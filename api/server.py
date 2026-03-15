@@ -94,6 +94,14 @@ def _create_rosbag_container(client: docker.DockerClient) -> Container:
             detail=f"tailscale container not found: {ts_container_name}",
         ) from exc
 
+    # force-remove any existing container with the same name before creating
+    # we know that no other service has a container with this name
+    try:
+        stale = cast(Container, client.containers.get(name))
+        stale.remove(force=True)
+    except NotFound:
+        pass
+
     return cast(
         Container,
         client.containers.create(
