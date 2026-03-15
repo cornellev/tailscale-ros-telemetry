@@ -151,6 +151,8 @@ def bag_start() -> BagActionResponse:
         if container.status == "running":
             status = _container_status(container)
             return BagActionResponse(**status.model_dump(), action="noop")
+        # just recreate rather than restart, as it is simpler and more reproducible
+        container = _create_rosbag_container(client)
         container.start()
         status = _container_status(container)
         return BagActionResponse(**status.model_dump(), action="started")
