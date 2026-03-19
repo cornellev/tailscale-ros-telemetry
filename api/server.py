@@ -2,6 +2,7 @@ import os
 
 # i love shoving types into an untyped language
 from typing import Callable, Optional, TypeVar, cast
+from datetime import datetime
 
 import docker
 from docker.errors import DockerException, NotFound
@@ -39,12 +40,16 @@ class BagActionResponse(ContainerStatus):
 
 # gets the docker client
 def _docker_client() -> docker.DockerClient:
-    base_url = os.environ.get("DOCKER_HOST", "unix://var/run/docker.sock")
+    base_url = os.environ.get("DOCKER_HOST", "unix:///var/run/docker.sock")
     return docker.DockerClient(base_url=base_url)
 
 
+def _container_name() -> str:
+    return os.environ.get("ROSBAG_CONTAINER_NAME", "rosbag")
+
+
 def _find_rosbag_container(client: docker.DockerClient) -> Container:
-    name = os.environ.get("ROSBAG_CONTAINER_NAME", "rosbag")
+    name = _container_name()
     try:
         return cast(Container, client.containers.get(name))
     except NotFound as exc:
@@ -79,7 +84,9 @@ def _container_status(container: Container) -> ContainerStatus:
 
 
 def _create_rosbag_container(client: docker.DockerClient) -> Container:
-    name = os.environ.get("ROSBAG_CONTAINER_NAME", "rosbag")
+    now = datetime.now()
+    # new container name each time
+    name = _container_name() + now.strftime("%Y-%m-%d")
     ts_container_name = os.environ.get(
         "TAILSCALE_CONTAINER_NAME", "ts-authkey-container"
     )
@@ -96,11 +103,11 @@ def _create_rosbag_container(client: docker.DockerClient) -> Container:
 
     # force-remove any existing container with the same name before creating
     # we know that no other service has a container with this name
-    try:
-        stale = cast(Container, client.containers.get(name))
-        stale.remove(force=True)
-    except NotFound:
-        pass
+    # try:
+    #     stale = cast(Container, client.containers.get(name))
+    #     stale.remove(force=True)
+    # except NotFound:
+    #     pass
 
     return cast(
         Container,
