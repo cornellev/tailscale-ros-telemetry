@@ -86,7 +86,7 @@ def _container_status(container: Container) -> ContainerStatus:
 def _create_rosbag_container(client: docker.DockerClient) -> Container:
     now = datetime.now()
     # new container name each time
-    name = _container_name() + now.strftime("%Y-%m-%d")
+    name = _container_name() + now.strftime("%Y-%m-%d-%H%M%S")
     ts_container_name = os.environ.get(
         "TAILSCALE_CONTAINER_NAME", "ts-authkey-container"
     )
