@@ -1,10 +1,9 @@
 FROM tailscale/tailscale:latest
 
-# Install jq and bash for generating fast.xml
-RUN apk add --no-cache jq bash
+RUN apk add --no-cache bash curl
 
 # Copy custom entrypoint
-COPY entrypoint-tailscale.sh /entrypoint-tailscale.sh
+COPY docker/entrypoint-tailscale.sh /entrypoint-tailscale.sh
 RUN chmod +x /entrypoint-tailscale.sh
 
 ENTRYPOINT ["/entrypoint-tailscale.sh"]
