@@ -1,7 +1,9 @@
 import os
+import threading
+import time
 
 # i love shoving types into an untyped language
-from typing import Callable, Optional, TypeVar, cast
+from typing import Any, Callable, Optional, TypeVar, cast
 
 import docker
 from docker.errors import APIError, DockerException, NotFound
@@ -21,6 +23,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# mutex to hopefully ensure we dont do too many things at once
+_bag_lock = threading.RLock()
+
+# docker and ros constants
+# they dont need to be declared as env vars because they probably will not ever change
+ROSBAG_CONTAINER_NAME = "rosbag"
+TAILSCALE_CONTAINER_NAME = "ts-authkey-container"
+ROSBAG_IMAGE = "tailscale-ros-telemetry-rosbag"
+ROS_SERVICE_LABEL = "com.docker.compose.service=ros"
 
 
 class HealthResponse(BaseModel):
@@ -44,16 +55,23 @@ def _docker_client() -> docker.DockerClient:
 
 
 def _container_name() -> str:
-    return os.environ.get("ROSBAG_CONTAINER_NAME", "rosbag")
+    return ROSBAG_CONTAINER_NAME
+
+
+def _ros_domain_id() -> str:
+    return os.environ.get("ROS_DOMAIN_ID", "14")
+
+
+def _tailscale_container_name() -> str:
+    return TAILSCALE_CONTAINER_NAME
 
 
 def _find_rosbag_container(client: docker.DockerClient) -> Container:
-    name = _container_name()
     try:
-        return cast(Container, client.containers.get(name))
+        return cast(Container, client.containers.get(_container_name()))
     except NotFound as exc:
         raise HTTPException(
-            status_code=404, detail=f"container not found: {name}"
+            status_code=404, detail=f"container not found: {_container_name()}"
         ) from exc
 
 
@@ -82,56 +100,146 @@ def _container_status(container: Container) -> ContainerStatus:
     )
 
 
-def _create_rosbag_container(client: docker.DockerClient) -> Container:
-    # deterministic name so there is only ever one rosbag container
-    name = _container_name()
-    ts_container_name = os.environ.get(
-        "TAILSCALE_CONTAINER_NAME", "ts-authkey-container"
+def _api_error_status_code(exc: APIError) -> Optional[int]:
+    status_code = getattr(exc, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code
+
+    response = getattr(exc, "response", None)
+    if response is None:
+        return None
+    return cast(Optional[int], getattr(response, "status_code", None))
+
+
+def _is_name_conflict(exc: APIError) -> bool:
+    status_code = _api_error_status_code(exc)
+    explanation = str(getattr(exc, "explanation", exc)).lower()
+    return status_code == 409 or "already in use" in explanation
+
+
+def _wait_until_removed(
+    client: docker.DockerClient, name: str, timeout_s: float = 10.0
+) -> None:
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            client.containers.get(name)
+        except NotFound:
+            return
+        time.sleep(0.1)
+    raise HTTPException(
+        status_code=500,
+        detail=f"timed out waiting for container removal: {name}",
     )
-    workspace = os.environ.get("ROSBAG_WORKSPACE", "/home/cev/tailscale-ros-telemetry")
-    image = os.environ.get("ROSBAG_IMAGE", "tailscale-ros-telemetry-rosbag")
+
+
+def _get_tailscale_container(client: docker.DockerClient) -> Container:
+    ts_container_name = _tailscale_container_name()
 
     try:
-        ts_container = client.containers.get(ts_container_name)
+        return cast(Container, client.containers.get(ts_container_name))
     except NotFound as exc:
         raise HTTPException(
             status_code=500,
             detail=f"tailscale container not found: {ts_container_name}",
         ) from exc
 
-    # force-remove any existing container with the same name before creating
-    # we know that no other service has a container with this name
-    # stop first to avoid APIError from the unless-stopped restart policy racing with remove
+
+def _discover_workspace_from_container(container: Container) -> Optional[str]:
+    mounts = cast(list[dict[str, Any]], container.attrs.get("Mounts", []))
+    for mount in mounts:
+        if mount.get("Destination") == "/workspace":
+            source = mount.get("Source")
+            if isinstance(source, str) and source:
+                return source
+    return None
+
+
+def _discover_rosbag_workspace(client: docker.DockerClient) -> str:
     try:
-        stale = cast(Container, client.containers.get(name))
-        try:
-            stale.stop(timeout=5)
-        except APIError:
-            pass
-        stale.remove(force=True)
+        container = cast(Container, client.containers.get(_container_name()))
+        container.reload()
+        workspace = _discover_workspace_from_container(container)
+        if workspace:
+            return workspace
     except NotFound:
         pass
 
-    return cast(
-        Container,
-        client.containers.create(
-            image=image,
-            name=name,
-            entrypoint=["/entrypoint-rosbag.sh"],
-            working_dir="/ros-telemetry",
-            environment={
-                "ROS_DISCOVERY_SERVER": "127.0.0.1:11811",
-                "ROS_DOMAIN_ID": os.environ.get("ROS_DOMAIN_ID", "14"),
-            },
-            volumes={
-                "/dev/shm": {"bind": "/dev/shm", "mode": "rw"},
-                workspace: {"bind": "/workspace", "mode": "rw"},
-                f"{workspace}/bags": {"bind": "/workspace/bags", "mode": "rw"},
-            },
-            network_mode=f"container:{ts_container.id}",
-            restart_policy={"Name": "unless-stopped"},
+    ros_containers = cast(
+        list[Container],
+        client.containers.list(
+            all=True,
+            filters={"label": ROS_SERVICE_LABEL},
         ),
     )
+    for container in ros_containers:
+        container.reload()
+        workspace = _discover_workspace_from_container(container)
+        if workspace:
+            return workspace
+
+    raise HTTPException(
+        status_code=500,
+        detail=(
+            "unable to determine rosbag workspace: create the compose-managed ros "
+            "container first"
+        ),
+    )
+
+
+def _rosbag_container_kwargs(client: docker.DockerClient) -> dict[str, Any]:
+    workspace = _discover_rosbag_workspace(client)
+    ts_container = _get_tailscale_container(client)
+    return {
+        "image": ROSBAG_IMAGE,
+        "name": _container_name(),
+        "entrypoint": ["/entrypoint-rosbag.sh"],
+        "working_dir": "/ros-telemetry",
+        "environment": {
+            "ROS_DISCOVERY_SERVER": "127.0.0.1:11811",
+            "ROS_DOMAIN_ID": _ros_domain_id(),
+        },
+        "volumes": {
+            "/dev/shm": {"bind": "/dev/shm", "mode": "rw"},
+            workspace: {"bind": "/workspace", "mode": "rw"},
+            f"{workspace}/bags": {"bind": "/workspace/bags", "mode": "rw"},
+        },
+        "network_mode": f"container:{ts_container.id}",
+        "restart_policy": {"Name": "unless-stopped"},
+    }
+
+
+def _remove_rosbag_container_if_present(client: docker.DockerClient) -> None:
+    name = _container_name()
+    try:
+        stale = cast(Container, client.containers.get(name))
+        stale.reload()
+        try:
+            if stale.status == "running":
+                stale.stop(timeout=20)
+        except APIError as exc:
+            if _api_error_status_code(exc) not in (304, 404):
+                raise
+        try:
+            stale.remove(force=True)
+        except NotFound:
+            pass
+        _wait_until_removed(client, name)
+    except NotFound:
+        pass
+
+
+def _create_rosbag_container(client: docker.DockerClient) -> Container:
+    _remove_rosbag_container_if_present(client)
+
+    try:
+        return cast(
+            Container, client.containers.create(**_rosbag_container_kwargs(client))
+        )
+    except APIError as exc:
+        if _is_name_conflict(exc):
+            return cast(Container, client.containers.get(_container_name()))
+        raise
 
 
 @app.get("/healthz", response_model=HealthResponse)
@@ -151,20 +259,31 @@ def bag_status() -> ContainerStatus:
 @app.post("/bag/start", response_model=BagActionResponse)
 def bag_start() -> BagActionResponse:
     def _handler(client: docker.DockerClient) -> BagActionResponse:
-        try:
-            container = cast(Container, client.containers.get(_container_name()))
-        except NotFound:
-            container = _create_rosbag_container(client)
+        with _bag_lock:
+            try:
+                container = cast(Container, client.containers.get(_container_name()))
+                container.reload()
+                if container.status == "running":
+                    status = _container_status(container)
+                    return BagActionResponse(**status.model_dump(), action="noop")
+            except NotFound:
+                pass
 
-        container.reload()
-        if container.status == "running":
+            # recreate rather than restart so each start gets a clean bag path and config
+            container = _create_rosbag_container(client)
+            try:
+                container.start()
+            except APIError as exc:
+                if not _is_name_conflict(exc):
+                    raise
+                container = cast(Container, client.containers.get(_container_name()))
+                container.reload()
+                if container.status != "running":
+                    raise
+                status = _container_status(container)
+                return BagActionResponse(**status.model_dump(), action="noop")
             status = _container_status(container)
-            return BagActionResponse(**status.model_dump(), action="noop")
-        # just recreate rather than restart, as it is simpler and more reproducible
-        container = _create_rosbag_container(client)
-        container.start()
-        status = _container_status(container)
-        return BagActionResponse(**status.model_dump(), action="started")
+            return BagActionResponse(**status.model_dump(), action="started")
 
     return _with_client(_handler)
 
@@ -172,15 +291,25 @@ def bag_start() -> BagActionResponse:
 @app.post("/bag/stop", response_model=BagActionResponse)
 def bag_stop() -> BagActionResponse:
     def _handler(client: docker.DockerClient) -> BagActionResponse:
-        container = _find_rosbag_container(client)
-        container.reload()
-        # was already not running, ie stopped, so no need to do anything
-        if container.status != "running":
+        with _bag_lock:
+            try:
+                container = cast(Container, client.containers.get(_container_name()))
+                container.reload()
+            except NotFound:
+                # nothing to stop — treat as noop
+                return BagActionResponse(
+                    id="",
+                    name=_container_name(),
+                    status="not found",
+                    action="noop",
+                )
+            # was already not running, ie stopped, so no need to do anything
+            if container.status != "running":
+                status = _container_status(container)
+                return BagActionResponse(**status.model_dump(), action="noop")
+            # 20 second timeout should be more than enough
+            container.stop(timeout=20)
             status = _container_status(container)
-            return BagActionResponse(**status.model_dump(), action="noop")
-        # 20 second timeout should be more than enough
-        container.stop(timeout=20)
-        status = _container_status(container)
-        return BagActionResponse(**status.model_dump(), action="stopped")
+            return BagActionResponse(**status.model_dump(), action="stopped")
 
     return _with_client(_handler)
