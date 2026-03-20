@@ -12,7 +12,7 @@ class SpiPublisher(Node):
         self.publisher_ = self.create_publisher(String, 'spi_data', 10)
         #create shared memory buffer
         self.reader = SensorShmReader()
-        self.timer = self.create_timer(0.005, self.timer_callback)  # ~200 Hz
+        self.timer = self.create_timer(0.02, self.timer_callback)  # ~50 Hz
 
     def timer_callback(self):
         snap = self.reader.read_snapshot_dict()
