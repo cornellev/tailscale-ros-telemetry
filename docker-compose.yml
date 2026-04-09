@@ -26,6 +26,7 @@ services:
       timeout: 5s
       retries: 30
       start_period: 10s
+    restart: unless-stopped
 
   discovery-server:
     build:
@@ -38,6 +39,13 @@ services:
       tailscale:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      # healthcheck: tests to see if localhost:11811 can be reached via tcp
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/11811"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
 
   rosbag-api:
     build:
@@ -88,7 +96,7 @@ services:
       tailscale:
         condition: service_healthy
       discovery-server:
-        condition: service_started
+        condition: service_healthy
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_DISCOVERY_SERVER=127.0.0.1:11811
@@ -110,6 +118,8 @@ services:
     depends_on:
       tailscale:
         condition: service_healthy
+      discovery-server:
+        condition: service_healthy
     volumes:
       - .:/workspace
       - /dev/shm:/dev/shm
@@ -118,6 +128,7 @@ services:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
       - ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-127.0.0.1:11811}
     working_dir: /workspace
+    restart: unless-stopped
 
 volumes:
   ts-authkey-container:
