@@ -40,8 +40,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      # healthcheck: tests to see if localhost:11811 can be reached via tcp
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/11811"]
+      # healthcheck: checks /proc/net/udp for port 11811 (0x2E23) being bound
+      test: ["CMD", "bash", "-c", "grep -q ':2E23 ' /proc/net/udp"]
       interval: 2s
       timeout: 3s
       retries: 30
