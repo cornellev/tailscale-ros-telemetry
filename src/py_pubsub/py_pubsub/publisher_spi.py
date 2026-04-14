@@ -4,7 +4,6 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from .uc26_sensor_reader.read_shm import SensorShmReader
 import json
-import random
 
 class SpiPublisher(Node):
     def __init__(self):
@@ -15,6 +14,14 @@ class SpiPublisher(Node):
         self.timer = self.create_timer(0.02, self.timer_callback)  # ~50 Hz
 
     def timer_callback(self):
+        # retry attaching to shared memory if reader wasn't initialized properly
+        # this will retry every time until it works
+        if not self.reader.available:
+            self.reader = SensorShmReader()
+            if not self.reader.available:
+                self.get_logger().warning("Not connected to shared memory. Is shm writer running?")
+                return
+
         snap = self.reader.read_snapshot_dict()
 
         if snap:
@@ -24,9 +31,9 @@ class SpiPublisher(Node):
             msg.data = json.dumps(snap)
             self.publisher_.publish(msg)
             self.get_logger().info(f"Published: {msg.data}")
-           
+
         else:
-            self.get_logger().warning("No data read from shared memory")
+            self.get_logger().warning("Failed to read snapshot from shared memory")
 
     def destroy_node(self):
         self.reader.close()
