@@ -12,40 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import rclpy
-from rclpy.node import Node
+import logging
 
-from std_msgs.msg import String
+import zenoh
+
+from .transport import DEMO_KEY, runtime
 
 
-class MinimalSubscriber(Node):
+class MinimalSubscriber:
+    def __init__(self, session):
+        self.logger = logging.getLogger("minimal_subscriber")
+        self.subscription = session.declare_subscriber(DEMO_KEY, self.listener_callback)
 
-    def __init__(self):
-        super().__init__('minimal_subscriber')
-        self.subscription = self.create_subscription(
-            String,
-            'topic',
-            self.listener_callback,
-            10)
-        self.subscription  # prevent unused variable warning
-
-    def listener_callback(self, msg):
-        self.get_logger().info('I heard: "%s"' % msg.data)
+    def listener_callback(self, sample):
+        if sample.kind != zenoh.SampleKind.PUT:
+            return
+        try:
+            self.logger.info('I heard: "%s"', sample.payload.to_string())
+        except ValueError:
+            self.logger.warning("Failed to decode demo message")
 
 
 def main(args=None):
-    rclpy.init(args=args)
-
-    minimal_subscriber = MinimalSubscriber()
-
-    rclpy.spin(minimal_subscriber)
-
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
-    minimal_subscriber.destroy_node()
-    rclpy.shutdown()
+    with runtime() as (session, stop):
+        node = MinimalSubscriber(session)
+        try:
+            stop.wait()
+        finally:
+            node.subscription.undeclare()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

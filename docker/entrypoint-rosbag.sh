@@ -2,7 +2,6 @@
 set -e
 
 source /opt/ros/humble/setup.bash
-source /ros-telemetry/install/setup.bash
 
 echo "ROS_DOMAIN_ID is set to: ${ROS_DOMAIN_ID:-<unset>}"
 

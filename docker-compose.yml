@@ -28,7 +28,20 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  zenoh-router:
+    image: eclipse/zenoh:1.9.0
+    command: ["--config", "/config/zenoh-router.json5"]
+    network_mode: service:tailscale
+    volumes:
+      - ./config/zenoh-router.json5:/config/zenoh-router.json5:ro
+    depends_on:
+      tailscale:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Legacy ROS recording services; they do not consume the Zenoh stream yet.
   discovery-server:
+    profiles: [bag]
     build:
       context: .
       dockerfile: docker/Dockerfile.ros
@@ -48,6 +61,7 @@ services:
       start_period: 10s
 
   rosbag-api:
+    profiles: [bag]
     build:
       context: .
       dockerfile: docker/Dockerfile.api
@@ -74,10 +88,12 @@ services:
     depends_on:
       ros:
         condition: service_started
+      discovery-server:
+        condition: service_healthy
     volumes:
       - .:/workspace
       - ./bags:/workspace/bags
-      - /dev/shm:/dev/shm # share host shm so FastDDS shared memory transport works with ros
+      - /dev/shm:/dev/shm # retained for legacy DDS recordings
     network_mode: service:tailscale
     environment:
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
@@ -87,19 +103,16 @@ services:
   ros:
     build:
       context: .
-      dockerfile: docker/Dockerfile.ros
-    # devices:
-    #   - ${GPIO_DEVICE:-/dev/gpiomem}:${GPIO_DEVICE:-/dev/gpiomem}
+      dockerfile: docker/Dockerfile.zenoh
     restart: unless-stopped
     network_mode: service:tailscale
     depends_on:
       tailscale:
         condition: service_healthy
-      discovery-server:
-        condition: service_healthy
+      zenoh-router:
+        condition: service_started
     environment:
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
-      - ROS_DISCOVERY_SERVER=127.0.0.1:11811
+      - ZENOH_CONNECT=${ZENOH_CONNECT:-tcp/127.0.0.1:7447}
     volumes:
       - .:/workspace
       - /dev/shm:/dev/shm # bind host POSIX shm into the container
@@ -113,20 +126,14 @@ services:
   subscriber:
     build:
       context: .
-      dockerfile: docker/Dockerfile.ros
+      dockerfile: docker/Dockerfile.zenoh
     entrypoint: ["/entrypoint-subscriber.sh"]
     depends_on:
       tailscale:
         condition: service_healthy
-      discovery-server:
-        condition: service_healthy
-    volumes:
-      - .:/workspace
-      - /dev/shm:/dev/shm
     network_mode: service:tailscale
     environment:
-      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-14}
-      - ROS_DISCOVERY_SERVER=${ROS_DISCOVERY_SERVER:-127.0.0.1:11811}
+      - ZENOH_CONNECT=${ZENOH_CONNECT:-tcp/127.0.0.1:7447}
     working_dir: /workspace
     restart: unless-stopped
 

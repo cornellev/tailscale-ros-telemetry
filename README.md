@@ -1,219 +1,198 @@
 # tailscale-ros-telemetry
 
-reading shm telemetry data and publishing as ROS2 topics
+Read host shared-memory telemetry and publish it as JSON over Zenoh and Tailscale.
+The live publisher, subscribers, demos, and latency reporter run without ROS.
+ROS bag recording is retained as legacy tooling and has **not** been migrated.
 
-## how it works
+## Data interface
 
-- the host writes telemetry data to a shared memory
-- we read the telemetry data from shared memory and publish it as the ROS2 topic `/spi_data`
-- the ROS2 node communicates over a Tailscale network, allowing subscribers to receive data as well
+| Former ROS topic | Zenoh key | Payload | Publisher rate |
+|---|---|---|---|
+| `/spi_data` | `spi_data` | UTF-8 JSON, `application/json` | ~50 Hz |
+| `/topic` | `topic` | UTF-8 text, `text/plain` (`Hello World: N`) | 2 Hz |
 
-## project structure
+The telemetry payload is exactly the JSON previously stored in `std_msgs/String.data`.
+There is no new wrapper: `seq`, `global_ts`, `errcount`, `power`, `steering`,
+`rpm_front`, `rpm_back`, `gps`, `motor`, `filtered`, and their nested fields keep
+the same names, values, and units. `_t_publish_ns` remains an integer Unix-epoch
+publication timestamp in nanoseconds. The shared-memory reader and its binary
+layout are unchanged.
 
+Zenoh keys omit the ROS leading slash. Existing ROS/DDS clients need to switch
+their subscription to Zenoh; their JSON parsing and sensor processing can stay
+largely the same:
+
+```python
+# Before, in a ROS subscription callback:
+data = json.loads(msg.data)
+
+# Now, in a Zenoh subscription callback:
+data = json.loads(sample.payload.to_string())
 ```
-docker-compose.yml      # service definitions
-config/                 # env files and XML profiles
-docker/                 # Dockerfiles and entrypoint scripts
-src/                    # ROS2 package source
-```
 
-## setup
+Publications use blocking congestion control over TCP. This is a live stream:
+there is no replay, retained last value, or guarantee of delivery during a
+connection outage. ROS QoS queue depth, domain IDs, remapping, and simulated ROS
+time do not apply. Use separate routers or distinct keys if multiple publishers
+need isolated streams.
 
-copy `.env.example` to `.env` and fill in your values:
+## Setup
+
+Initialize the pinned sensor-reader submodule, then configure Tailscale:
 
 ```bash
+git submodule update --init --recursive
 cp .env.example .env
 ```
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `TS_CLIENT_ID` | yes | — | Tailscale OAuth client ID |
-| `TS_CLIENT_SECRET` | yes | — | Tailscale OAuth client secret |
-| `ROS_DOMAIN_ID` | no | `14` | ROS2 domain ID |
-| `ROS_DISCOVERY_SERVER` | no | `127.0.0.1:11811` | Fast DDS discovery server address |
-| `ROSBAG_API_PORT` | no | `8080` | Port the rosbag HTTP API listens on |
-| `GPIO_DEVICE` | no | `/dev/gpiomem` | GPIO device path (Raspberry Pi 5: `/dev/gpiomem4`) |
+| Variable | Default | Description |
+|---|---|---|
+| `TS_CLIENT_ID` | required | Tailscale OAuth client ID |
+| `TS_CLIENT_SECRET` | required | Tailscale OAuth client secret |
+| `ZENOH_CONNECT` | `tcp/127.0.0.1:7447` | Router endpoint; comma-separated endpoints are also supported |
+| `ROS_DOMAIN_ID` | `14` | Legacy bag tooling only |
+| `ROSBAG_API_PORT` | `8080` | Legacy bag HTTP API only |
 
-## docker compose services
-
-there are six services defined in [docker-compose.yml](docker-compose.yml):
-
-### `tailscale`
-
-Connects the device to your Tailscale network and gates startup for the other services
-
-- authenticates using OAuth credentials (`TS_CLIENT_ID` / `TS_CLIENT_SECRET`) and advertises the tag `tag:ros-device`
-- runs [entrypoint-tailscale.sh](docker/entrypoint-tailscale.sh), which waits for the Tailscale connection to be established before exiting the startup loop
-
-### `discovery-server`
-
-Runs a [Fast DDS Discovery Server](https://docs.ros.org/en/humble/Tutorials/Advanced/Discovery-Server/Discovery-Server.html), which centralizes DDS peer discovery instead of using multicast/unicast to all known peers.
-
-- runs [entrypoint-discovery.sh](docker/entrypoint-discovery.sh): sources the ROS2 environment and starts `fastdds discovery --server-id 0` on port 11811 (UDP)
-- shares the `tailscale` network namespace, so it is reachable on the Tailscale IP of this device at port 11811
-- `ros` connects as a plain CLIENT via `ROS_DISCOVERY_SERVER=127.0.0.1:11811`
-- `rosbag` connects as a SUPER_CLIENT via an XML profile
-
-### `ros`
-
-The main ROS2 publisher. Reads telemetry from host shared memory and publishes to the `/spi_data` topic.
-
-- runs [entrypoint-ros.sh](docker/entrypoint-ros.sh): sources the ROS2 environment and launches the `py_pubsub talker` node
-- runs as a plain DDS CLIENT via `ROS_DISCOVERY_SERVER=127.0.0.1:11811`
-- binds and mounts `/dev/shm` from the host to:
-    - read telemetry data from host
-    - communicate with `rosbag`, as FastDDS uses shared memory when possible
-- accesses GPIO via the configured `GPIO_DEVICE` (default `/dev/gpiomem`)
-
-### `rosbag`
-
-Records the `/spi_data` topic to timestamped bag files. This service does not
-start immediately with the others (profile `bag`), but is controlled via the
-`rosbag-api` service.
-
-- runs [entrypoint-rosbag.sh](docker/entrypoint-rosbag.sh): sources the ROS2 environment and runs `ros2 bag record /spi_data`
-- runs as a SUPER_CLIENT — required for `ros2 bag record` to discover topic types
-- binds and mounts `/dev/shm` from the host for FastDDS shared memory transport with `ros`
-- saves bags to `./bags/bag_YYYYMMDD-HHMMSS/`
-- starts after the `ros` service has started
-
-To create the container without starting it (so the API can start/stop it):
+Start the host sensor writer as before. It owns `/dev/shm/sensor_shm`; the
+publisher only reads it and retries attaching if the writer has not started.
+The Python publisher does not require GPIO access or pigpio.
 
 ```bash
-docker compose --profile bag up -d --no-start rosbag
+docker compose up -d --build
+docker compose logs -f subscriber
 ```
 
-To start it immediately without the API:
+The default services are:
 
-```bash
-docker compose --profile bag up -d rosbag
-```
+- `tailscale`: joins the tailnet using the existing hostname and `tag:ros-device`.
+- `zenoh-router`: runs Zenoh 1.9.0 on TCP port 7447 inside the Tailscale network
+  namespace, using [config/zenoh-router.json5](config/zenoh-router.json5).
+- `ros`: the Zenoh telemetry publisher. The old service name is kept for scripts
+  and the legacy bag API's workspace lookup. It mounts the host `/dev/shm`.
+- `subscriber`: logs JSON received on `spi_data`, using the same Python image.
 
-### `rosbag-api`
+The router starts after Tailscale is healthy; the publisher starts after the
+router container starts. Clients allow up to 10 seconds to establish the initial
+connection, and Compose restarts failed processes. Multicast discovery is
+disabled; all clients connect explicitly to the router. Only TCP port 7447 needs
+to be reachable through the tailnet for live telemetry. There is no published
+Docker host port.
 
-Super simple HTTP API that starts/stops the rosbag container. It is intended for
-a frontend to control recording without needing direct access to Docker or the command line.
+The `ros` service still mounts the workspace for compatibility, but Python code
+is installed in the image. Rebuild the image after changing the source.
 
-- talks to Docker via `/var/run/docker.sock`
-- exposed on port `8080` on the device's Tailscale IP (configurable via `ROSBAG_API_PORT`)
+## Remote subscribers
 
-Endpoints:
-
-- `POST /bag/start`: Starts the `rosbag` container
-- `POST /bag/stop`: Stops the `rosbag` container
-- `GET /bag/status`: Returns whether the `rosbag` container is running or not
-- `GET /healthz`: Healthcheck endpoint
-
-Optional environment variables (all configurable via `.env`):
-
-- `ROSBAG_API_PORT` (default `8080`) — port the API listens on
-
-The rosbag API uses fixed internal values for the rosbag container name, the
-Tailscale container name, and the rosbag image. It discovers the workspace bind
-mount from the compose-managed containers instead of reading it from the
-environment.
-
-Example:
-
-```bash
-curl -X POST http://<tailscale-ip>:8080/bag/start
-curl http://<tailscale-ip>:8080/bag/status
-curl -X POST http://<tailscale-ip>:8080/bag/stop
-```
-
-### `subscriber`
-
-
-A verification listener that subscribes to `/spi_data` and logs received messages. Hidden behind the `verify` profile so it doesn't start by default.
-
-- runs [entrypoint-subscriber.sh](docker/entrypoint-subscriber.sh): sources the ROS2 environment and launches the `py_pubsub listener` node
-- runs as a plain DDS CLIENT via `ROS_DISCOVERY_SERVER` (defaults to `127.0.0.1:11811`, overridable via env var)
-- start locally: `docker compose --profile verify up -d`
-- can also run on a remote machine (see [using this repo on a remote machine](#using-this-repo-on-a-remote-machine))
-
-## shared memory and discovery
-
-`rosbag` service needs two special things:
-- shm
-    - fastDDS use shared memory transport for same-host clients, so we need to bind to `/dev/shm` to allow data to flow
-- SUPER_CLIENT
-    - `ros bag record` requires introspection in order to know the type of a topic. (not possible to manually specify it like you do for `ros topic echo`)
-    - with a discovery server, only a SUPER_CLIENT can use introspection
-
-### startup order
-
-the services are started sequentially, one after the other
-
-1. `tailscale`: connects to the tailnet
-2. `discovery-server`: starts the Fast DDS discovery server
-3. `ros`: starts publishing
-4. `rosbag`: starts recording
-
-## How to add a subscriber
-
-Subscribers connect to the discovery server over the Tailscale network. Find the publisher's Tailscale IP:
+Find the publisher's Tailscale IP:
 
 ```bash
 docker exec ts-authkey-container tailscale ip -4
 ```
 
-### Using this repo on a remote machine
-
-If this repo is cloned on the remote machine:
+On a remote machine with this repo and its own Tailscale credentials in `.env`:
 
 ```bash
-cd tailscale-ros-telemetry
-ROS_DISCOVERY_SERVER=<publisher-tailscale-ip>:11811 docker compose --profile verify up -d tailscale subscriber
-docker compose --profile verify logs -f subscriber
+git submodule update --init --recursive
+ZENOH_CONNECT=tcp/<publisher-tailscale-ip>:7447 \
+  docker compose up -d --build tailscale subscriber
+docker compose logs -f subscriber
 ```
 
-### Adding a docker subscriber
+Starting just `tailscale subscriber` does not start a local router or publisher.
+The subscriber doesn't need access to the publisher's shared memory.
 
-```yaml
-services:
-  tailscale:
-    image: tailscale/tailscale:latest
-    container_name: ts-subscriber
-    hostname: my-subscriber
-    environment:
-      - TS_CLIENT_ID=${TS_CLIENT_ID:-}
-      - TS_CLIENT_SECRET=${TS_CLIENT_SECRET:-}
-      - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=false
-      - TS_AUTH_ONCE=true
-      - TS_EXTRA_ARGS=--advertise-tags=tag:ros-device --ssh=true
-    volumes:
-      - ts-authkey-container:/var/lib/tailscale
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
+A standalone Python client on a machine already connected to Tailscale only
+needs `pip install eclipse-zenoh==1.9.0`:
 
-  subscriber:
-    image: ros:humble-ros-base-jammy
-    network_mode: service:tailscale
-    environment:
-      - ROS_DISCOVERY_SERVER=<publisher-tailscale-ip>:11811
-    command: bash -c "source /opt/ros/humble/setup.bash && ros2 topic echo /spi_data std_msgs/msg/String"
+```python
+import json
+import time
+import zenoh
 
-volumes:
-  ts-authkey-container:
-    driver: local
+config = zenoh.Config.from_json5(json.dumps({
+    "mode": "client",
+    "connect": {"endpoints": ["tcp/<publisher-tailscale-ip>:7447"]},
+    "scouting": {"multicast": {"enabled": False}},
+}))
+
+
+def on_data(sample):
+    if sample.kind == zenoh.SampleKind.PUT:
+        data = json.loads(sample.payload.to_string())
+        print(data)
+
+
+try:
+    with zenoh.open(config) as session:
+        subscriber = session.declare_subscriber("spi_data", on_data)
+        while True:
+            time.sleep(1)
+except KeyboardInterrupt:
+    pass
 ```
 
-### SUPER_CLIENT mode
+See the [official Zenoh Python API documentation](https://zenoh-python.readthedocs.io/)
+for other client operations.
 
-Required for introspection tools (`ros2 topic list`, `ros2 node list`, `ros2 bag record`). Generate the XML profile and mount it:
+## Local development and commands
+
+Use Python 3.10 or newer. `nix develop` optionally supplies Python and virtualenv;
+ROS is no longer needed in the default development shell.
 
 ```bash
-sed 's/DISCOVERY_SERVER_IP/<publisher-tailscale-ip>/' config/super_client.example.xml > /tmp/super_client.xml
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e 'src/py_pubsub[test]'
 ```
 
-```yaml
-  your_service:
-    network_mode: service:tailscale
-    environment:
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/config/super_client.xml
-    volumes:
-      - /tmp/super_client.xml:/config/super_client.xml:ro
+Run a local router (or point `ZENOH_CONNECT` at an existing one):
+
+```bash
+docker run --rm -p 127.0.0.1:7447:7447 \
+  -v "$PWD/config/zenoh-router.json5:/config/zenoh-router.json5:ro" \
+  eclipse/zenoh:1.9.0 --config /config/zenoh-router.json5
 ```
+
+The former `ros2 run py_pubsub <command>` commands are installed directly into
+the Python environment:
+
+| Command | Behavior |
+|---|---|
+| `talker` | Publish shared-memory telemetry on `spi_data` at ~50 Hz |
+| `listener` | Log the JSON telemetry stream |
+| `publisher_test` | Publish the existing random `sensor1`/`sensor2` JSON at 10 Hz |
+| `latency_reporter` | Log `delay_ms` from `_t_publish_ns` |
+| `talkerdemo` | Publish `Hello World: N` on `topic` at 2 Hz |
+| `listenerdemo` | Log messages from `topic` |
+
+For example, run `publisher_test` and `listener` in separate terminals for a
+hardware-free smoke test. The simulated publisher retains its two-field payload
+and does not include `_t_publish_ns`; use `talker` to measure sensor latency.
+Clocks must be synchronized between machines for meaningful one-way latency.
+All commands close their Zenoh sessions on SIGINT or SIGTERM.
+
+You can also run commands in the existing Compose image:
+
+```bash
+docker compose run --rm ros latency_reporter
+```
+
+Tests start an isolated local router and use actual TCP pub/sub, including a
+temporary shared-memory sensor block. No Tailscale credentials or hardware are
+needed:
+
+```bash
+python -m pytest src/py_pubsub/test -q
+```
+
+## Deferred bag recording
+
+`rosbag`, `rosbag-api`, and the old DDS `discovery-server` are kept behind the
+`bag` profile. Their ROS recording/control behavior remains in place, including
+`POST /bag/start`, `POST /bag/stop`, `GET /bag/status`, and `GET /healthz`.
+They do **not** receive the new Zenoh stream, and `/bag/start` does not imply that
+Zenoh telemetry is being recorded. No ROS-to-Zenoh bridge or new recording format
+is included in this migration.
+
+The legacy ROS Dockerfile, SUPER_CLIENT XML, bag storage paths, and API are kept
+for that follow-up work. `nix develop .#rosbag` retains the legacy ROS shell.

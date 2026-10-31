@@ -1,6 +1,11 @@
 install/
 log/
 build/
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+.ruff_cache/
 
 # Ignore generated docs
 *.dox

@@ -1,0 +1,9 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+
+[tool.ruff]
+extend-exclude = ["py_pubsub/uc26_sensor_reader"]

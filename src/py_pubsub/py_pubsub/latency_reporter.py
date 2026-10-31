@@ -1,42 +1,45 @@
+"""Report one-way latency using the existing _t_publish_ns JSON field."""
+
 import json
-import rclpy
-from rclpy.node import Node
-from std_msgs.msg import Float64, String
+import logging
+import time
 
-class LatencyReporter(Node):
-    def __init__(self):
-        super().__init__("latency_reporter")
-        self.sub = self.create_subscription(
-            String,
-            "spi_data",
-            self.callback,
-            10,
-        )
+import zenoh
 
-    def callback(self, msg):
+from .transport import SPI_KEY, runtime
+
+
+class LatencyReporter:
+    def __init__(self, session):
+        self.logger = logging.getLogger("latency_reporter")
+        self.sub = session.declare_subscriber(SPI_KEY, self.callback)
+
+    def callback(self, sample):
+        if sample.kind != zenoh.SampleKind.PUT:
+            return
+        now_ns = time.time_ns()
         try:
-            data = json.loads(msg.data)
-        except json.JSONDecodeError:
+            data = json.loads(sample.payload.to_string())
+        except ValueError:  # Invalid UTF-8 or JSON.
             return
-        t_publish_ns = data.get("_t_publish_ns")
-        if t_publish_ns is None:
-            self.get_logger().warn("Message has no '_t_publish_ns'; cannot compute delay.")
+        t_publish_ns = data.get("_t_publish_ns") if isinstance(data, dict) else None
+        if type(t_publish_ns) is not int:
+            self.logger.warning(
+                "Message has no valid '_t_publish_ns'; cannot compute delay."
+            )
             return
-        now_ns = self.get_clock().now().nanoseconds
-        delay_ns = now_ns - t_publish_ns
-        delay_ms = delay_ns / 1e6
-        self.get_logger().info(f"delay_ms={delay_ms:.2f}")
+        delay_ms = (now_ns - t_publish_ns) / 1e6
+        self.logger.info("delay_ms=%.2f", delay_ms)
+
 
 def main(args=None):
-    rclpy.init(args=args)
-    node = LatencyReporter()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
+    with runtime() as (session, stop):
+        node = LatencyReporter(session)
+        try:
+            stop.wait()
+        finally:
+            node.sub.undeclare()
+
 
 if __name__ == "__main__":
     main()
