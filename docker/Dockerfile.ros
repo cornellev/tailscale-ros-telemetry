@@ -3,6 +3,7 @@ FROM ros:humble-ros-base-jammy
 # install packages
 RUN apt-get update && apt-get install -y \
     ca-certificates gnupg git build-essential unzip wget \
+    ros-humble-rosbag2-storage-mcap \
     && rm -rf /var/lib/apt/lists/*
 
 # install pigpio from source
