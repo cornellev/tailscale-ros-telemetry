@@ -24,4 +24,4 @@ TIMESTAMP=$(date +'%Y%m%d-%H%M%S')
 BAG_DIR="/workspace/bags/bag_${TIMESTAMP}"
 
 echo "Recording topic '${TOPIC_NAME}' to '${BAG_DIR}'..."
-exec ros2 bag record "${TOPIC_NAME}" -o "${BAG_DIR}"
+exec ros2 bag record -s mcap "${TOPIC_NAME}" -o "${BAG_DIR}"
